@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { gocardless, getSupabaseClient } from "@/lib/gocardless"
+import { gocardless } from "@/lib/gocardless"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             gocardless.getAccountBalances(accountId),
           ])
 
-          const supabase = getSupabaseClient()
+          const supabase = await createClient()
           const { error: dbError } = await supabase.from("gocardless_accounts").upsert({
             gocardless_id: accountId,
             requisition_id: requisitionId,
@@ -35,6 +36,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
           if (dbError) {
             console.error("[v0] Database error saving account:", dbError)
+          } else {
+            console.log("[v0] Successfully saved account to database:", accountId)
           }
 
           return {

@@ -24,6 +24,8 @@ interface AlertState {
 }
 
 export default function ConnectPage() {
+  console.log("[v0] ConnectPage component initializing...")
+
   const router = useRouter()
   const [institutions, setInstitutions] = useState<Institution[]>([])
   const [selectedInstitution, setSelectedInstitution] = useState("")
@@ -32,18 +34,23 @@ export default function ConnectPage() {
   const [alert, setAlert] = useState<AlertState | null>(null)
 
   useEffect(() => {
+    console.log("[v0] useEffect triggered, fetching institutions...")
     fetchInstitutions()
   }, [])
 
   const fetchInstitutions = async () => {
     try {
+      console.log("[v0] Fetching institutions from /api/institutions...")
       const res = await fetch("/api/institutions")
       const data = await res.json()
+      console.log("[v0] Institutions fetched:", data.length, "institutions")
       setInstitutions(data)
     } catch (error) {
+      console.log("[v0] Error fetching institutions:", error)
       setAlert({ type: "error", message: "Error cargando instituciones" })
     } finally {
       setInstitutionsLoading(false)
+      console.log("[v0] Institutions loading completed")
     }
   }
 
@@ -110,20 +117,28 @@ export default function ConnectPage() {
       })
 
       const data = await res.json()
+      console.log("[v0] Sandbox test response:", data)
 
       if (data.success) {
+        console.log("[v0] Success! Link received:", data.link)
         setAlert({
           type: "success",
           message: "Redirigiendo al simulador bancario oficial de GoCardless...",
         })
 
+        console.log("[v0] Setting timeout for redirection...")
         setTimeout(() => {
+          console.log("[v0] Executing redirection to:", data.link)
+          console.log("[v0] Current window.location:", window.location.href)
           window.location.href = data.link
+          console.log("[v0] Redirection command executed")
         }, 1500)
       } else {
+        console.log("[v0] Error in response:", data.error)
         setAlert({ type: "error", message: data.error || "Error creando requisition de prueba" })
       }
     } catch (error) {
+      console.log("[v0] Catch error:", error)
       setAlert({ type: "error", message: "Error de conexión. Inténtalo de nuevo." })
     } finally {
       setLoading(false)
@@ -132,9 +147,22 @@ export default function ConnectPage() {
 
   const selectedInstitutionData = institutions.find((i) => i.id === selectedInstitution)
 
+  console.log("[v0] ConnectPage rendering with:", {
+    institutionsCount: institutions.length,
+    selectedInstitution,
+    loading,
+    institutionsLoading,
+    alert,
+  })
+
   return (
     <Layout>
       <div className="max-w-6xl mx-auto space-y-6">
+        <div className="bg-yellow-100 border border-yellow-300 rounded p-2 text-xs">
+          Debug: Page loaded successfully - Institutions: {institutions.length} | Loading:{" "}
+          {institutionsLoading ? "Yes" : "No"}
+        </div>
+
         {/* Header */}
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={() => router.push("/")} className="flex items-center gap-2">
