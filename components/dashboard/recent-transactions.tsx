@@ -24,51 +24,19 @@ export function RecentTransactions() {
 
   const fetchRecentTransactions = async () => {
     try {
-      // Simular datos de transacciones recientes
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const res = await fetch("/api/transactions?limit=4")
+      const data = await res.json()
 
-      const mockTransactions: Transaction[] = [
-        {
-          id: "tx_1",
-          amount: -45.67,
-          currency: "EUR",
-          description: "Supermercado El Corte Inglés",
-          date: new Date().toISOString(),
-          type: "debit",
-          account_name: "Cuenta Corriente",
-        },
-        {
-          id: "tx_2",
-          amount: 2500.0,
-          currency: "EUR",
-          description: "Nómina - Empresa ABC",
-          date: new Date(Date.now() - 86400000).toISOString(),
-          type: "credit",
-          account_name: "Cuenta Nómina",
-        },
-        {
-          id: "tx_3",
-          amount: -12.5,
-          currency: "EUR",
-          description: "Netflix Subscription",
-          date: new Date(Date.now() - 172800000).toISOString(),
-          type: "debit",
-          account_name: "Cuenta Corriente",
-        },
-        {
-          id: "tx_4",
-          amount: -89.99,
-          currency: "EUR",
-          description: "Gasolinera Repsol",
-          date: new Date(Date.now() - 259200000).toISOString(),
-          type: "debit",
-          account_name: "Cuenta Corriente",
-        },
-      ]
-
-      setTransactions(mockTransactions)
+      if (res.ok) {
+        setTransactions(data)
+      } else {
+        console.error("Error fetching transactions:", data.error)
+        // Fallback to empty array on error
+        setTransactions([])
+      }
     } catch (error) {
       console.error("Error fetching transactions:", error)
+      setTransactions([])
     } finally {
       setLoading(false)
     }

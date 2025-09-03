@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const [accountsResult, transactionsResult, institutionsResult, lastSyncResult] = await Promise.all([
       // Total accounts

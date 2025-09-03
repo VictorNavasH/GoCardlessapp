@@ -47,7 +47,24 @@ export function AccountsSummary() {
   }
 
   const getTotalBalance = () => {
-    return accounts.reduce((total, account) => total + account.current_balance, 0)
+    const balancesByCurrency = accounts.reduce(
+      (acc, account) => {
+        if (!acc[account.currency]) {
+          acc[account.currency] = 0
+        }
+        acc[account.currency] += account.current_balance
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+
+    // Return the EUR balance, or the first available currency
+    return balancesByCurrency.EUR || Object.values(balancesByCurrency)[0] || 0
+  }
+
+  const getDisplayCurrency = () => {
+    const currencies = [...new Set(accounts.map((acc) => acc.currency))]
+    return currencies.includes("EUR") ? "EUR" : currencies[0] || "EUR"
   }
 
   if (loading) {
@@ -76,7 +93,12 @@ export function AccountsSummary() {
           {/* Balance total */}
           <div className="bg-blue-50 p-4 rounded-lg">
             <p className="text-sm text-blue-600 font-medium">Balance Total</p>
-            <p className="text-2xl font-bold text-blue-900">{formatCurrency(getTotalBalance(), "EUR")}</p>
+            <p className="text-2xl font-bold text-blue-900">
+              {formatCurrency(getTotalBalance(), getDisplayCurrency())}
+            </p>
+            {accounts.length > 0 && new Set(accounts.map((acc) => acc.currency)).size > 1 && (
+              <p className="text-xs text-blue-500 mt-1">* Solo cuentas en {getDisplayCurrency()}</p>
+            )}
           </div>
 
           {/* Lista de cuentas */}

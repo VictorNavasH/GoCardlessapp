@@ -19,25 +19,19 @@ export function BalanceChart() {
 
   const fetchBalanceHistory = async () => {
     try {
-      // Simular datos de historial de balance
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      const res = await fetch("/api/balance-history?days=7")
+      const data = await res.json()
 
-      const mockData: BalanceData[] = []
-      const today = new Date()
-
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(today)
-        date.setDate(date.getDate() - i)
-
-        mockData.push({
-          date: date.toISOString().split("T")[0],
-          balance: 18000 + Math.random() * 2000 - 1000, // Balance base con variación
-        })
+      if (res.ok) {
+        setBalanceData(data)
+      } else {
+        console.error("Error fetching balance history:", data.error)
+        // Fallback to empty array on error
+        setBalanceData([])
       }
-
-      setBalanceData(mockData)
     } catch (error) {
       console.error("Error fetching balance history:", error)
+      setBalanceData([])
     } finally {
       setLoading(false)
     }

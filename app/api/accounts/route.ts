@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
-    const supabase = createClient()
+    const supabase = await createClient()
 
     const { data: accounts, error } = await supabase
       .from("gocardless_accounts")
@@ -11,7 +11,7 @@ export async function GET() {
         *,
         gocardless_institutions (
           name,
-          logo
+          logo_url
         )
       `)
       .eq("status", "ACTIVE")
