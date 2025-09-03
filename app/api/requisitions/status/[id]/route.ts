@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { gocardless, getSupabaseClient } from "@/lib/gocardless"
+import { gocardless } from "@/lib/gocardless"
+import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       accounts: requisition.accounts?.length || 0,
     })
 
-    const supabase = getSupabaseClient()
+    const supabase = await createClient()
     const { error: dbError } = await supabase
       .from("gocardless_requisitions")
       .update({
