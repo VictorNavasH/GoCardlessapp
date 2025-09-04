@@ -136,20 +136,33 @@ export default function CallbackPage() {
       const accountsData = await accountsRes.json()
       console.log("[v0] Accounts data:", accountsData)
 
-      setProgress(100)
-      setAccounts(accountsData.accounts)
-      setStatus("success")
-      setMessage("¡Conexión exitosa! Tus cuentas han sido vinculadas.")
+      setProgress(90)
+      setMessage("Sincronizando transacciones...")
 
-      // Iniciar sincronización inicial
-      setTimeout(() => {
-        console.log("[v0] Starting initial sync")
-        fetch("/api/sync/initial", {
+      try {
+        console.log("[v0] Starting initial sync for", accountsData.accounts.length, "accounts")
+        const syncRes = await fetch("/api/sync/initial", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ accounts: accountsData.accounts }),
         })
-      }, 2000)
+
+        if (syncRes.ok) {
+          const syncData = await syncRes.json()
+          console.log("[v0] Initial sync completed successfully:", syncData)
+          setMessage(`¡Conexión exitosa! Se sincronizaron ${syncData.transactions_imported || 0} transacciones.`)
+        } else {
+          console.log("[v0] Initial sync failed with status:", syncRes.status)
+          setMessage("¡Conexión exitosa! Las transacciones se sincronizarán en segundo plano.")
+        }
+      } catch (syncError) {
+        console.log("[v0] Error in initial sync:", syncError)
+        setMessage("¡Conexión exitosa! Las transacciones se sincronizarán automáticamente.")
+      }
+
+      setProgress(100)
+      setAccounts(accountsData.accounts)
+      setStatus("success")
     } catch (error) {
       console.log("[v0] Error in callback processing:", error)
       console.log("[v0] Error details:", error instanceof Error ? error.message : String(error))

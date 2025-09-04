@@ -58,7 +58,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           const accountDataToSave = {
             gocardless_id: accountId,
             requisition_id: requisitionUuid,
-            institution_id: requisitionData.institution_id || null,
+            institution_id: requisitionData.institution_id,
             iban: accountDetails.iban || null,
             name: accountDetails.name || null,
             display_name: accountDetails.displayName || accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
