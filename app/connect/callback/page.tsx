@@ -71,7 +71,7 @@ export default function CallbackPage() {
         console.log(`[v0] Polling attempt ${attempts + 1}/${maxAttempts} for requisition status`)
 
         try {
-          const res = await fetch(`/api/requisitions/status-by-id/${requisitionId}`)
+          const res = await fetch(`/api/requisitions/status/${requisitionId}`)
           console.log("[v0] Status API response status:", res.status, res.statusText)
 
           if (!res.ok) {
@@ -125,7 +125,7 @@ export default function CallbackPage() {
       setProgress(75)
       setMessage("Configurando cuentas...")
 
-      const accountsRes = await fetch(`/api/requisitions/accounts-by-id/${requisitionId}`)
+      const accountsRes = await fetch(`/api/requisitions/accounts/${requisitionId}`)
       console.log("[v0] Accounts API response status:", accountsRes.status, accountsRes.statusText)
 
       if (!accountsRes.ok) {
