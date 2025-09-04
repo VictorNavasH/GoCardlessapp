@@ -17,11 +17,12 @@ interface Account {
 export default function CallbackPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const ref = searchParams.get("ref")
+
+  const requisitionId = searchParams.get("requisition_id") || searchParams.get("ref")
   const error = searchParams.get("error")
 
   console.log("[v0] CallbackPage component loaded")
-  console.log("[v0] URL params - ref:", ref, "error:", error)
+  console.log("[v0] URL params - requisition_id:", requisitionId, "error:", error)
   console.log("[v0] Full search params:", Object.fromEntries(searchParams.entries()))
 
   const [status, setStatus] = useState<"processing" | "success" | "error">("processing")
@@ -44,15 +45,15 @@ export default function CallbackPage() {
       return
     }
 
-    if (!ref) {
-      console.log("[v0] No ref parameter found")
+    if (!requisitionId) {
+      console.log("[v0] No requisition_id parameter found")
       setStatus("error")
-      setMessage("Referencia de requisition no encontrada")
+      setMessage("ID de requisition no encontrado en la URL de callback")
       return
     }
 
     try {
-      console.log("[v0] Processing callback for ref:", ref)
+      console.log("[v0] Processing callback for requisition_id:", requisitionId)
 
       // Simular progreso de procesamiento
       setProgress(25)
@@ -70,7 +71,7 @@ export default function CallbackPage() {
         console.log(`[v0] Polling attempt ${attempts + 1}/${maxAttempts} for requisition status`)
 
         try {
-          const res = await fetch(`/api/requisitions/status/${ref}`)
+          const res = await fetch(`/api/requisitions/status-by-id/${requisitionId}`)
           console.log("[v0] Status API response status:", res.status, res.statusText)
 
           if (!res.ok) {
@@ -124,9 +125,7 @@ export default function CallbackPage() {
       setProgress(75)
       setMessage("Configurando cuentas...")
 
-      // Autorización exitosa, obtener cuentas
-      console.log("[v0] About to fetch accounts from:", `/api/requisitions/accounts/${ref}`)
-      const accountsRes = await fetch(`/api/requisitions/accounts/${ref}`)
+      const accountsRes = await fetch(`/api/requisitions/accounts-by-id/${requisitionId}`)
       console.log("[v0] Accounts API response status:", accountsRes.status, accountsRes.statusText)
 
       if (!accountsRes.ok) {
