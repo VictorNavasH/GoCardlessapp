@@ -33,19 +33,16 @@ export async function GET() {
     const transformedAccounts =
       accounts?.map((account) => ({
         id: account.gocardless_id || account.id,
-        display_name:
-          account.name || account.account_name || `Account ${(account.gocardless_id || account.id || "").slice(-4)}`,
-        iban: account.iban || account.account_iban || "ES****",
-        current_balance: Number.parseFloat(account.balance_amount || account.current_balance || "0") || 0,
-        currency: account.balance_currency || account.currency || "EUR",
-        status: account.status || "UNKNOWN",
+        display_name: account.display_name || account.name || `Cuenta ${account.gocardless_id?.slice(-4)}`,
+        iban: account.iban || "ES****",
+        current_balance: Number.parseFloat(account.current_balance || account.balance_amount || "0"),
+        currency: account.currency || "EUR",
+        status: account.status || "ACTIVE",
         institution_name: account.gocardless_institutions?.name || "Unknown Bank",
-        balance_last_updated_at: account.updated_at || account.created_at,
+        balance_last_updated_at: account.balance_last_updated_at || account.updated_at,
       })) || []
 
-    const activeAccounts = transformedAccounts.filter(
-      (account) => account.status === "ACTIVE" || account.status === "READY" || account.status === "UNKNOWN",
-    )
+    const activeAccounts = transformedAccounts.filter((account) => account.status === "ACTIVE")
 
     console.log("[v0] Transformed accounts:", transformedAccounts.length)
     console.log("[v0] Active accounts:", activeAccounts.length)

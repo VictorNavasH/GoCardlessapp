@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const supabase = await createClient()
     const { data: requisitionData, error: dbError } = await supabase
       .from("gocardless_requisitions")
-      .select("id, gocardless_id")
+      .select("id, gocardless_id, institution_id")
       .eq("reference", reference)
       .single()
 
@@ -53,19 +53,32 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           console.log("[v0] About to execute upsert operation")
           console.log("[v0] Supabase client ready:", !!supabase)
 
-          const { data: upsertData, error: dbError } = await supabase.from("gocardless_accounts").upsert(
-            {
-              gocardless_id: accountId,
-              requisition_id: requisitionUuid,
-              iban: accountDetails.iban,
-              name: accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
-              currency: accountDetails.currency || "EUR",
-              balance: balances.balances?.[0]?.balanceAmount?.amount || "0",
-            },
-            {
+          const currentBalance = Number.parseFloat(balances.balances?.[0]?.balanceAmount?.amount || "0")
+
+          const accountDataToSave = {
+            gocardless_id: accountId,
+            requisition_id: requisitionUuid,
+            institution_id: requisitionData.institution_id || null,
+            iban: accountDetails.iban || null,
+            name: accountDetails.name || null,
+            display_name: accountDetails.displayName || accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
+            currency: accountDetails.currency || "EUR",
+            balance_amount: currentBalance,
+            current_balance: currentBalance,
+            status: "ACTIVE",
+            balance_last_updated_at: new Date().toISOString(),
+          }
+
+          console.log("[v0] Attempting to save account to database:", accountDataToSave)
+
+          console.log("[v0] About to execute upsert operation")
+          console.log("[v0] Supabase client ready:", !!supabase)
+
+          const { data: upsertData, error: dbError } = await supabase
+            .from("gocardless_accounts")
+            .upsert(accountDataToSave, {
               onConflict: "gocardless_id",
-            },
-          )
+            })
 
           console.log("[v0] Upsert operation completed")
           console.log("[v0] Upsert result data:", upsertData)
