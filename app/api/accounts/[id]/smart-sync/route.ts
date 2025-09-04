@@ -79,20 +79,47 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
 
         if (scope === "transactions") {
+          console.log(`[v0] Fetching transactions for account ${accountId}...`)
           const transactions = await gocardless.getAccountTransactions(accountId)
-          if (transactions && Array.isArray(transactions) && transactions.length > 0) {
-            const transactionData = transactions.map((tx) => ({
-              gocardless_id: tx.transactionId,
-              account_id: account.id,
-              amount: Number.parseFloat(tx.transactionAmount?.amount || "0"),
-              currency: tx.transactionAmount?.currency || "EUR",
-              date: tx.bookingDate || tx.valueDate || new Date().toISOString().split("T")[0],
-              description: tx.remittanceInformationUnstructured || tx.additionalInformation || "Transaction",
-              reference: tx.endToEndId || tx.transactionId,
-              created_at: new Date().toISOString(),
-            }))
 
-            await supabase.from("gocardless_transactions").upsert(transactionData, { onConflict: "gocardless_id" })
+          console.log(
+            `[v0] GoCardless returned ${transactions ? transactions.length : 0} transactions for account ${accountId}`,
+          )
+          console.log(`[v0] Raw transactions data:`, JSON.stringify(transactions, null, 2))
+
+          if (transactions && Array.isArray(transactions) && transactions.length > 0) {
+            console.log(`[v0] Processing ${transactions.length} transactions for database insert...`)
+
+            const transactionData = transactions.map((tx, index) => {
+              const mappedTx = {
+                gocardless_id: tx.transactionId,
+                account_id: account.id,
+                amount: Number.parseFloat(tx.transactionAmount?.amount || "0"),
+                currency: tx.transactionAmount?.currency || "EUR",
+                date: tx.bookingDate || tx.valueDate || new Date().toISOString().split("T")[0],
+                description: tx.remittanceInformationUnstructured || tx.additionalInformation || "Transaction",
+                reference: tx.endToEndId || tx.transactionId,
+                created_at: new Date().toISOString(),
+              }
+              console.log(`[v0] Mapped transaction ${index + 1}:`, mappedTx)
+              return mappedTx
+            })
+
+            console.log(`[v0] Inserting ${transactionData.length} transactions into database...`)
+            const { data: insertResult, error: insertError } = await supabase
+              .from("gocardless_transactions")
+              .upsert(transactionData, { onConflict: "gocardless_id" })
+
+            if (insertError) {
+              console.error(`[v0] Database insert error:`, insertError)
+              throw new Error(`Database insert failed: ${insertError.message}`)
+            } else {
+              console.log(`[v0] Successfully inserted transactions:`, insertResult)
+            }
+          } else {
+            console.log(`[v0] No transactions returned from GoCardless for account ${accountId}`)
+            console.log(`[v0] Transactions is array: ${Array.isArray(transactions)}`)
+            console.log(`[v0] Transactions length: ${transactions ? transactions.length : "null/undefined"}`)
           }
         }
 
