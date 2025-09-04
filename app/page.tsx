@@ -8,13 +8,17 @@ import { QuickActionCard } from "../components/dashboard/quick-action-card"
 import { RecentTransactions } from "../components/dashboard/recent-transactions"
 import { AccountsSummary } from "../components/dashboard/accounts-summary"
 import { BalanceChart } from "../components/dashboard/balance-chart"
-import { Building2, CreditCard, TrendingUp, Users } from "lucide-react"
+import { Building2, CreditCard, TrendingUp, Users, Clock, Zap, AlertTriangle } from "lucide-react"
 
 interface DashboardStats {
   totalAccounts: number
   totalTransactions: number
   connectedInstitutions: number
   lastSync: string | null
+  daysUntilRenewal: number
+  dailyApiCalls: number
+  maxDailyApiCalls: number
+  apiCallsRemaining: number
 }
 
 export default function HomePage() {
@@ -24,6 +28,10 @@ export default function HomePage() {
     totalTransactions: 0,
     connectedInstitutions: 0,
     lastSync: null,
+    daysUntilRenewal: 90,
+    dailyApiCalls: 0,
+    maxDailyApiCalls: 300,
+    apiCallsRemaining: 300,
   })
 
   useEffect(() => {
@@ -40,6 +48,16 @@ export default function HomePage() {
     }
   }
 
+  const getApiUsagePercentage = () => {
+    return Math.round((stats.dailyApiCalls / stats.maxDailyApiCalls) * 100)
+  }
+
+  const getRenewalStatus = () => {
+    if (stats.daysUntilRenewal <= 7) return { color: "text-red-600", status: "Crítico" }
+    if (stats.daysUntilRenewal <= 30) return { color: "text-yellow-600", status: "Atención" }
+    return { color: "text-green-600", status: "Activo" }
+  }
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -47,6 +65,10 @@ export default function HomePage() {
           <div>
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <p className="text-gray-600">Gestión de conexiones bancarias GoCardless</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`w-3 h-3 rounded-full ${stats.totalAccounts > 0 ? "bg-green-500" : "bg-gray-400"}`}></div>
+            <span className="text-sm text-gray-600">{stats.totalAccounts > 0 ? "Conectado" : "Sin conexiones"}</span>
           </div>
         </div>
 
@@ -75,6 +97,51 @@ export default function HomePage() {
             icon={Users}
             iconColor="text-orange-600"
           />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Llamadas API Hoy</p>
+                <p className="text-2xl font-bold">
+                  {stats.dailyApiCalls}/{stats.maxDailyApiCalls}
+                </p>
+                <p className="text-sm text-gray-500">{getApiUsagePercentage()}% usado</p>
+              </div>
+              <Zap className="h-8 w-8 text-blue-600" />
+            </div>
+            <div className="mt-4 bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${getApiUsagePercentage()}%` }}
+              ></div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Renovación de Permisos</p>
+                <p className="text-2xl font-bold">{stats.daysUntilRenewal} días</p>
+                <p className={`text-sm ${getRenewalStatus().color}`}>{getRenewalStatus().status}</p>
+              </div>
+              <Clock className="h-8 w-8 text-orange-600" />
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-lg border">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-600">Llamadas Restantes</p>
+                <p className="text-2xl font-bold">{stats.apiCallsRemaining}</p>
+                <p className="text-sm text-gray-500">Se renueva en 24h</p>
+              </div>
+              <AlertTriangle
+                className={`h-8 w-8 ${stats.apiCallsRemaining < 50 ? "text-red-600" : "text-green-600"}`}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

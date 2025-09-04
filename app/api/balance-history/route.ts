@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
     const { data: transactions, error: txError } = await supabase
       .from("gocardless_transactions")
-      .select("booking_date, transaction_amount, amount, currency, account_id")
+      .select("booking_date, amount, currency, account_id")
       .in("account_id", accountIds)
       .gte("booking_date", startDate.toISOString().split("T")[0])
       .order("booking_date", { ascending: true })
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
     // Calculate total balance from all transactions
     const totalTransactionAmount =
       transactions?.reduce((sum, tx) => {
-        const amount = Number.parseFloat(tx.transaction_amount || tx.amount || "0")
+        const amount = Number.parseFloat(tx.amount || "0")
         return sum + amount
       }, 0) || 0
 
@@ -66,7 +66,7 @@ export async function GET(request: Request) {
 
       // Calculate balance for this day
       const dayAmount = dayTransactions.reduce((sum, tx) => {
-        const amount = Number.parseFloat(tx.transaction_amount || tx.amount || "0")
+        const amount = Number.parseFloat(tx.amount || "0")
         return sum + amount
       }, 0)
 

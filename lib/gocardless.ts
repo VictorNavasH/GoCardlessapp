@@ -318,19 +318,61 @@ class GoCardlessClient {
   }
 
   async getAccount(accountId: string) {
-    return this.makeRequest(`/api/v2/accounts/${accountId}/`)
+    const result = await this.makeRequest(`/api/v2/accounts/${accountId}/`)
+    await this.saveRateLimitInfo(accountId, "details")
+    return result
   }
 
   async getAccountBalances(accountId: string) {
-    return this.makeRequest(`/api/v2/accounts/${accountId}/balances/`)
+    const result = await this.makeRequest(`/api/v2/accounts/${accountId}/balances/`)
+    await this.saveRateLimitInfo(accountId, "balances")
+    return result
   }
 
   async getAccountTransactions(accountId: string) {
-    return this.makeRequest(`/api/v2/accounts/${accountId}/transactions/`)
+    const result = await this.makeRequest(`/api/v2/accounts/${accountId}/transactions/`)
+    await this.saveRateLimitInfo(accountId, "transactions")
+    return result
   }
 
   getRateLimitInfo(): RateLimitInfo {
     return { ...this.rateLimitInfo }
+  }
+
+  private async saveRateLimitInfo(accountId: string, scope: string) {
+    if (!this.rateLimitInfo.accountSuccessRemaining || !this.rateLimitInfo.accountSuccessLimit) {
+      return // No hay información de rate limit para guardar
+    }
+
+    try {
+      const { createClient } = await import("@/lib/supabase/server")
+      const supabase = await createClient()
+
+      const resetTime = this.rateLimitInfo.accountSuccessReset
+        ? new Date(Date.now() + this.rateLimitInfo.accountSuccessReset * 1000)
+        : null
+
+      await supabase.from("gocardless_rate_limits").upsert(
+        {
+          account_id: accountId,
+          scope: scope,
+          date: new Date().toISOString().split("T")[0],
+          limit_per_day: this.rateLimitInfo.accountSuccessLimit,
+          remaining_calls: this.rateLimitInfo.accountSuccessRemaining,
+          reset_time: resetTime?.toISOString(),
+          last_updated: new Date().toISOString(),
+        },
+        {
+          onConflict: "account_id,scope,date",
+        },
+      )
+
+      console.log(
+        `[v0] Rate limit saved for account ${accountId}, scope ${scope}: ${this.rateLimitInfo.accountSuccessRemaining}/${this.rateLimitInfo.accountSuccessLimit}`,
+      )
+    } catch (error) {
+      console.error("[v0] Error saving rate limit info:", error)
+    }
   }
 }
 
