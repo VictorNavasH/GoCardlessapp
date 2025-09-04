@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const supabase = await createClient()
     const { data: requisitionData, error: dbError } = await supabase
       .from("gocardless_requisitions")
-      .select("gocardless_id")
+      .select("id, gocardless_id")
       .eq("reference", reference)
       .single()
 
@@ -20,7 +20,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const gocardlessRequisitionId = requisitionData.gocardless_id
+    const requisitionUuid = requisitionData.id
     console.log("[v0] Found GoCardless requisition ID:", gocardlessRequisitionId)
+    console.log("[v0] Found requisition UUID:", requisitionUuid)
 
     const requisition = await gocardless.getRequisition(gocardlessRequisitionId)
 
@@ -41,7 +43,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
           const { error: dbError } = await supabase.from("gocardless_accounts").upsert({
             gocardless_id: accountId,
-            requisition_id: reference,
+            requisition_id: requisitionUuid,
             iban: accountDetails.iban,
             name: accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
             currency: accountDetails.currency,
