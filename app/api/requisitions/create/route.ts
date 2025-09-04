@@ -120,7 +120,12 @@ export async function POST(request: NextRequest) {
     })
 
     if (dbError) {
-      console.error("[v0] Database error:", dbError)
+      console.error("[v0] Database error details:")
+      console.error("[v0] - Code:", dbError.code)
+      console.error("[v0] - Message:", dbError.message)
+      console.error("[v0] - Details:", dbError.details)
+      console.error("[v0] - Hint:", dbError.hint)
+      console.error("[v0] - Full error object:", JSON.stringify(dbError, null, 2))
       return NextResponse.json({ error: "Error saving requisition to database" }, { status: 500 })
     }
 
