@@ -41,7 +41,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             gocardless.getAccountBalances(accountId),
           ])
 
-          const { error: dbError } = await supabase.from("gocardless_accounts").upsert({
+          console.log("[v0] Attempting to save account to database:", {
+            gocardless_id: accountId,
+            requisition_id: requisitionUuid,
+            iban: accountDetails.iban,
+            name: accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
+            currency: accountDetails.currency,
+            balance: balances.balances?.[0]?.balanceAmount?.amount || "0",
+          })
+
+          const { data: upsertData, error: dbError } = await supabase.from("gocardless_accounts").upsert({
             gocardless_id: accountId,
             requisition_id: requisitionUuid,
             iban: accountDetails.iban,
@@ -52,9 +61,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           })
 
           if (dbError) {
-            console.error("[v0] Database error saving account:", dbError)
+            console.error("[v0] Database error saving account:", {
+              error: dbError,
+              code: dbError.code,
+              message: dbError.message,
+              details: dbError.details,
+              hint: dbError.hint,
+            })
           } else {
-            console.log("[v0] Successfully saved account to database:", accountId)
+            console.log("[v0] Successfully saved account to database:", {
+              accountId,
+              upsertData,
+              requisitionUuid,
+            })
           }
 
           return {
