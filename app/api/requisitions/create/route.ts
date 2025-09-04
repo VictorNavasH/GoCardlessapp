@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { gocardless, getSupabaseClient } from "@/lib/gocardless"
+import { gocardless } from "@/lib/gocardless"
+import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,19 +10,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    const supabase = getSupabaseClient()
+    const supabase = await createClient()
 
     const isSandbox = institution_id === "SANDBOXFINANCE_SFIN0000"
 
     let institutionData: any
 
     if (isSandbox) {
-      // For sandbox, create a mock institution record or use existing
-      console.log("[v0] Using official GoCardless sandbox institution for testing")
-      institutionData = {
-        id: "00000000-0000-0000-0000-000000000000", // Mock UUID for sandbox
-        gocardless_id: "SANDBOXFINANCE_SFIN0000",
-        name: "Sandbox Finance",
+      const { data: existingSandbox, error: sandboxError } = await supabase
+        .from("gocardless_institutions")
+        .select("id, gocardless_id, name")
+        .eq("gocardless_id", "SANDBOXFINANCE_SFIN0000")
+        .single()
+
+      if (sandboxError || !existingSandbox) {
+        // Create sandbox institution if it doesn't exist
+        const { data: newSandbox, error: createSandboxError } = await supabase
+          .from("gocardless_institutions")
+          .insert({
+            gocardless_id: "SANDBOXFINANCE_SFIN0000",
+            name: "Sandbox Finance",
+            bic: "SFIN0000",
+            country: "GB",
+            logo_url: null,
+            supported_features: JSON.stringify(["transactions", "balances", "details"]),
+            is_active: true,
+          })
+          .select("id, gocardless_id, name")
+          .single()
+
+        if (createSandboxError) {
+          console.error("[v0] Error creating sandbox institution:", createSandboxError)
+          return NextResponse.json({ error: "Error creating sandbox institution" }, { status: 500 })
+        }
+        institutionData = newSandbox
+      } else {
+        institutionData = existingSandbox
       }
     } else {
       const { data: institutionDataResult, error: institutionError } = await supabase
@@ -89,24 +113,22 @@ export async function POST(request: NextRequest) {
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + 90)
 
-    if (!isSandbox) {
-      const { error: dbError } = await supabase.from("gocardless_requisitions").insert({
-        gocardless_id: requisition.id,
-        institution_id: institutionData.id,
-        reference: reference,
-        status: requisition.status,
-        redirect_url: redirect_url,
-        link: requisition.link,
-        agreement_id: requisition.agreement,
-        accounts: requisition.accounts || [],
-        expires_at: expiresAt.toISOString(),
-        created_at: new Date().toISOString(),
-      })
+    const { error: dbError } = await supabase.from("gocardless_requisitions").insert({
+      gocardless_id: requisition.id,
+      institution_id: institutionData.id,
+      reference: reference,
+      status: requisition.status,
+      redirect_url: redirect_url,
+      link: requisition.link,
+      agreement_id: requisition.agreement,
+      accounts: requisition.accounts || [],
+      expires_at: expiresAt.toISOString(),
+      created_at: new Date().toISOString(),
+    })
 
-      if (dbError) {
-        console.error("[v0] Database error:", dbError)
-        return NextResponse.json({ error: "Error saving requisition to database" }, { status: 500 })
-      }
+    if (dbError) {
+      console.error("[v0] Database error:", dbError)
+      return NextResponse.json({ error: "Error saving requisition to database" }, { status: 500 })
     }
 
     return NextResponse.json({
