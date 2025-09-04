@@ -4,17 +4,35 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const requisitionId = params.id
+    const reference = params.id
 
-    console.log("[v0] Checking requisition status for ID:", requisitionId)
+    console.log("[v0] Checking requisition status for reference:", reference)
 
-    if (!requisitionId || requisitionId.length < 10) {
-      console.error("[v0] Invalid requisition ID:", requisitionId)
-      return NextResponse.json({ error: "Invalid requisition ID" }, { status: 400 })
+    if (!reference || reference.length < 10) {
+      console.error("[v0] Invalid requisition reference:", reference)
+      return NextResponse.json({ error: "Invalid requisition reference" }, { status: 400 })
     }
 
-    console.log("[v0] Calling GoCardless API for requisition:", requisitionId)
-    const requisition = await gocardless.getRequisition(requisitionId)
+    const supabase = await createClient()
+    const { data: requisitionRecord, error: dbError } = await supabase
+      .from("gocardless_requisitions")
+      .select("gocardless_id, status, accounts")
+      .eq("reference", reference)
+      .single()
+
+    if (dbError || !requisitionRecord) {
+      console.error("[v0] Requisition not found in database:", dbError)
+      return NextResponse.json({ error: "Requisition not found" }, { status: 404 })
+    }
+
+    console.log("[v0] Found requisition in database:", {
+      reference,
+      gocardless_id: requisitionRecord.gocardless_id,
+      current_status: requisitionRecord.status,
+    })
+
+    console.log("[v0] Calling GoCardless API for requisition:", requisitionRecord.gocardless_id)
+    const requisition = await gocardless.getRequisition(requisitionRecord.gocardless_id)
 
     console.log("[v0] GoCardless response received:", {
       id: requisition.id,
@@ -22,20 +40,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       accounts: requisition.accounts?.length || 0,
     })
 
-    const supabase = await createClient()
-    const { error: dbError } = await supabase
+    const { error: updateError } = await supabase
       .from("gocardless_requisitions")
       .update({
         status: requisition.status,
         accounts: requisition.accounts || [],
         updated_at: new Date().toISOString(),
       })
-      .eq("gocardless_id", requisitionId)
+      .eq("reference", reference)
 
-    if (dbError) {
-      console.error("[v0] Database update error:", dbError)
+    if (updateError) {
+      console.error("[v0] Database update error:", updateError)
     } else {
-      console.log("[v0] Database updated successfully")
+      console.log("[v0] Database updated successfully with status:", requisition.status)
     }
 
     return NextResponse.json(requisition)
