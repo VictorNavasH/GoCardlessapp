@@ -8,7 +8,18 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { CreditCard, RefreshCw, Eye, Search, Filter, Plus, Loader2 } from "lucide-react"
+import {
+  CreditCard,
+  RefreshCw,
+  Eye,
+  Search,
+  Filter,
+  Plus,
+  Loader2,
+  TrendingUp,
+  ArrowUpRight,
+  ArrowDownRight,
+} from "lucide-react"
 
 interface Account {
   id: string
@@ -93,7 +104,7 @@ export default function AccountsPage() {
     return (
       <Layout>
         <div className="flex justify-center items-center h-64">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       </Layout>
     )
@@ -101,34 +112,50 @@ export default function AccountsPage() {
 
   return (
     <Layout>
-      <div className="space-y-6">
-        {/* Header */}
+      <div className="space-y-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold">Cuentas Bancarias</h1>
-            <p className="text-gray-600">Gestiona tus cuentas conectadas</p>
+            <h1 className="text-4xl font-heading font-black text-foreground">Cuentas Bancarias</h1>
+            <p className="text-muted-foreground mt-2">Gestiona y supervisa todas tus cuentas conectadas</p>
           </div>
-          <Button onClick={() => router.push("/connect")} className="flex items-center gap-2">
+          <Button
+            onClick={() => router.push("/connect")}
+            className="flex items-center gap-2 bg-primary hover:bg-primary/90"
+          >
             <Plus className="h-4 w-4" />
             Conectar Nueva Cuenta
           </Button>
         </div>
 
-        {/* Summary Card */}
-        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <p className="text-sm font-medium text-blue-600">Total de Cuentas</p>
-                <p className="text-2xl font-bold text-blue-900">{filteredAccounts.length}</p>
+        <Card className="bg-gradient-to-br from-primary/5 via-accent/5 to-primary/10 border-primary/20 shadow-lg">
+          <CardContent className="p-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              <div className="text-center md:text-left">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-primary/10 rounded-lg">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                  </div>
+                  <p className="text-sm font-medium text-primary">Total de Cuentas</p>
+                </div>
+                <p className="text-3xl font-heading font-black text-primary">{filteredAccounts.length}</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-blue-600">Balance Total</p>
-                <p className="text-2xl font-bold text-blue-900">{formatCurrency(getTotalBalance())}</p>
+              <div className="text-center md:text-left">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-accent/10 rounded-lg">
+                    <TrendingUp className="h-5 w-5 text-accent" />
+                  </div>
+                  <p className="text-sm font-medium text-accent">Balance Total</p>
+                </div>
+                <p className="text-3xl font-heading font-black text-accent">{formatCurrency(getTotalBalance())}</p>
               </div>
-              <div>
-                <p className="text-sm font-medium text-blue-600">Cuentas Activas</p>
-                <p className="text-2xl font-bold text-blue-900">
+              <div className="text-center md:text-left">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <ArrowUpRight className="h-5 w-5 text-green-600" />
+                  </div>
+                  <p className="text-sm font-medium text-green-600">Cuentas Activas</p>
+                </div>
+                <p className="text-3xl font-heading font-black text-green-600">
                   {filteredAccounts.filter((acc) => acc.status === "ACTIVE").length}
                 </p>
               </div>
@@ -136,23 +163,22 @@ export default function AccountsPage() {
           </CardContent>
         </Card>
 
-        {/* Filters */}
-        <Card>
-          <CardContent className="p-4">
+        <Card className="shadow-sm">
+          <CardContent className="p-6">
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="flex-1">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     placeholder="Buscar por nombre, banco o IBAN..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 border-border focus:ring-primary"
                   />
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Filter className="h-4 w-4 text-gray-500" />
+                <Filter className="h-4 w-4 text-muted-foreground" />
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                   <SelectTrigger className="w-40">
                     <SelectValue />
@@ -170,50 +196,73 @@ export default function AccountsPage() {
 
         {/* Accounts List */}
         {filteredAccounts.length === 0 ? (
-          <Card>
-            <CardContent className="text-center py-12">
-              <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+          <Card className="shadow-sm">
+            <CardContent className="text-center py-16">
+              <div className="p-4 bg-muted rounded-full w-fit mx-auto mb-6">
+                <CreditCard className="h-12 w-12 text-muted-foreground" />
+              </div>
+              <h3 className="text-xl font-heading font-bold text-foreground mb-2">
                 {accounts.length === 0 ? "No hay cuentas conectadas" : "No se encontraron cuentas"}
               </h3>
-              <p className="text-gray-500 mb-4">
+              <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                 {accounts.length === 0
-                  ? "Conecta tu primera cuenta bancaria para comenzar"
-                  : "Intenta ajustar los filtros de búsqueda"}
+                  ? "Conecta tu primera cuenta bancaria para comenzar a gestionar tus finanzas"
+                  : "Intenta ajustar los filtros de búsqueda para encontrar las cuentas que buscas"}
               </p>
-              {accounts.length === 0 && <Button onClick={() => router.push("/connect")}>Conectar Cuenta</Button>}
+              {accounts.length === 0 && (
+                <Button onClick={() => router.push("/connect")} className="bg-primary hover:bg-primary/90">
+                  Conectar Primera Cuenta
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
             {filteredAccounts.map((account) => (
-              <Card key={account.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
+              <Card
+                key={account.id}
+                className="hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-border/50"
+              >
+                <CardHeader className="pb-4">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
-                      <CardTitle className="text-lg">{account.display_name}</CardTitle>
-                      <p className="text-sm text-gray-600">{account.institution_name}</p>
+                      <CardTitle className="text-lg font-heading font-bold text-foreground">
+                        {account.display_name}
+                      </CardTitle>
+                      <p className="text-sm text-muted-foreground mt-1">{account.institution_name}</p>
                     </div>
-                    <Badge variant={account.status === "ACTIVE" ? "default" : "secondary"}>{account.status}</Badge>
+                    <Badge
+                      variant={account.status === "ACTIVE" ? "default" : "secondary"}
+                      className={account.status === "ACTIVE" ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}
+                    >
+                      {account.status}
+                    </Badge>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <p className="text-sm text-gray-600">IBAN</p>
-                    <p className="font-mono text-sm">{formatIban(account.iban)}</p>
+                <CardContent className="space-y-6">
+                  <div className="p-4 bg-muted/30 rounded-lg">
+                    <p className="text-xs text-muted-foreground mb-1">IBAN</p>
+                    <p className="font-mono text-sm font-medium">{formatIban(account.iban)}</p>
                   </div>
 
                   <div className="flex justify-between items-center">
                     <div>
-                      <p className="text-sm text-gray-600">Saldo Actual</p>
-                      <p className="text-xl font-bold text-green-600">
+                      <p className="text-sm text-muted-foreground">Saldo Actual</p>
+                      <p className="text-2xl font-heading font-black text-primary">
                         {formatCurrency(account.current_balance, account.currency)}
                       </p>
                     </div>
+                    <div className="p-3 bg-primary/10 rounded-full">
+                      {account.current_balance >= 0 ? (
+                        <ArrowUpRight className="h-5 w-5 text-primary" />
+                      ) : (
+                        <ArrowDownRight className="h-5 w-5 text-destructive" />
+                      )}
+                    </div>
                   </div>
 
-                  <div>
-                    <p className="text-xs text-gray-500">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">
                       Actualizado: {new Date(account.balance_last_updated_at).toLocaleString()}
                     </p>
                   </div>
@@ -223,7 +272,7 @@ export default function AccountsPage() {
                       size="sm"
                       onClick={() => syncAccount(account.id)}
                       disabled={syncingAccounts.has(account.id)}
-                      className="flex-1"
+                      className="flex-1 bg-secondary hover:bg-secondary/90"
                     >
                       {syncingAccounts.has(account.id) ? (
                         <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -232,8 +281,14 @@ export default function AccountsPage() {
                       )}
                       Sincronizar
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => router.push(`/accounts/${account.id}`)}>
-                      <Eye className="h-3 w-3" />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => router.push(`/accounts/${account.id}`)}
+                      className="border-primary text-primary hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <Eye className="h-3 w-3 mr-1" />
+                      Ver Detalles
                     </Button>
                   </div>
                 </CardContent>
