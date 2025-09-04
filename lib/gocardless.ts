@@ -171,14 +171,23 @@ class GoCardlessClient {
       }
 
       if (!response.ok) {
-        const errorText = await response.text()
-
         if (response.status === 429) {
           const resetTime = this.rateLimitInfo.accountSuccessReset || this.rateLimitInfo.reset || 60
           console.error(`[v0] Rate limit exceeded. Try again in ${resetTime} seconds`)
           throw new Error(`Rate limit exceeded. Please try again in ${resetTime} seconds.`)
         }
 
+        if (response.status === 400) {
+          const errorText = await response.text()
+          console.error(`[v0] Bad Request:`, errorText)
+          throw new Error(`Invalid request: ${errorText}`)
+        }
+
+        if (response.status === 404) {
+          throw new Error(`Resource not found`)
+        }
+
+        const errorText = await response.text()
         console.error(`[v0] GoCardless API Error: ${response.status} ${response.statusText}`, errorText)
         throw new Error(`GoCardless API Error: ${response.status} ${response.statusText} - ${errorText}`)
       }
@@ -252,12 +261,14 @@ class GoCardlessClient {
       reference?: string
       createAgreement?: boolean
       userLanguage?: string
+      maxHistoricalDays?: number
+      accessValidForDays?: number
+      accessScope?: string[]
     },
   ) {
     const reference = options?.reference || `req_${Date.now()}`
     console.log("[v0] Creating requisition with reference:", reference)
 
-    // Use sandbox institution for testing environment
     const finalInstitutionId =
       process.env.NODE_ENV === "development" || institutionId === "SANDBOX" ? "SANDBOXFINANCE_SFIN0000" : institutionId
 
@@ -270,12 +281,19 @@ class GoCardlessClient {
       user_language: options?.userLanguage || "ES",
     }
 
-    // Only create agreement if explicitly requested (optional per GoCardless docs)
-    if (options?.createAgreement) {
-      const agreement = await this.createEndUserAgreement(finalInstitutionId)
+    // IMPORTANT: Create End User Agreement only if custom terms are specified
+    if (options?.createAgreement || options?.maxHistoricalDays || options?.accessValidForDays || options?.accessScope) {
+      const agreementOptions = {
+        maxHistoricalDays: options?.maxHistoricalDays || 90,
+        accessValidForDays: options?.accessValidForDays || 90,
+        accessScope: options?.accessScope || ["balances", "details", "transactions"],
+      }
+
+      const agreement = await this.createEndUserAgreement(finalInstitutionId, agreementOptions)
       requisitionData.agreement = agreement.id
       console.log("[v0] Using custom End User Agreement:", agreement.id)
     } else {
+      // FOLLOW OFFICIAL RECOMMENDATION: No agreement = default terms
       console.log("[v0] Using default GoCardless terms (90 days history, 90 days access, full scope)")
     }
 

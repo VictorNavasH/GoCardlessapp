@@ -11,13 +11,7 @@ export async function GET(request: Request) {
 
     let query = supabase
       .from("gocardless_transactions")
-      .select(`
-        *,
-        gocardless_accounts!inner(
-          display_name,
-          gocardless_institutions(name)
-        )
-      `)
+      .select("*")
       .order("booking_date", { ascending: false })
       .limit(limit)
 
@@ -32,18 +26,51 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
+    const accountIds = [...new Set(transactions?.map((tx) => tx.account_id).filter(Boolean))]
+
+    let accountsData = []
+    if (accountIds.length > 0) {
+      const { data: accounts } = await supabase
+        .from("gocardless_accounts")
+        .select("id, display_name, institution_id")
+        .in("id", accountIds)
+
+      if (accounts) {
+        const institutionIds = [...new Set(accounts.map((acc) => acc.institution_id).filter(Boolean))]
+
+        let institutionsData = []
+        if (institutionIds.length > 0) {
+          const { data: institutions } = await supabase
+            .from("gocardless_institutions")
+            .select("id, name")
+            .in("id", institutionIds)
+
+          institutionsData = institutions || []
+        }
+
+        accountsData = accounts.map((acc) => ({
+          ...acc,
+          institution_name: institutionsData.find((inst) => inst.id === acc.institution_id)?.name || "Banco",
+        }))
+      }
+    }
+
     // Transform data to match frontend interface
     const transformedTransactions =
-      transactions?.map((tx) => ({
-        id: tx.id,
-        amount: Number.parseFloat(tx.transaction_amount),
-        currency: tx.currency,
-        description: tx.remittance_information_unstructured || tx.creditor_name || "Transacción",
-        date: tx.booking_date,
-        type: Number.parseFloat(tx.transaction_amount) >= 0 ? "credit" : "debit",
-        account_name: tx.gocardless_accounts?.display_name || "Cuenta",
-        institution_name: tx.gocardless_accounts?.gocardless_institutions?.name || "Banco",
-      })) || []
+      transactions?.map((tx) => {
+        const account = accountsData.find((acc) => acc.id === tx.account_id)
+
+        return {
+          id: tx.id,
+          amount: Number.parseFloat(tx.transaction_amount || tx.amount || "0"),
+          currency: tx.currency || "EUR",
+          description: tx.remittance_information_unstructured || tx.creditor_name || "Transacción",
+          date: tx.booking_date,
+          type: Number.parseFloat(tx.transaction_amount || tx.amount || "0") >= 0 ? "credit" : "debit",
+          account_name: account?.display_name || "Cuenta",
+          institution_name: account?.institution_name || "Banco",
+        }
+      }) || []
 
     return NextResponse.json(transformedTransactions)
   } catch (error) {

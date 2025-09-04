@@ -4,14 +4,13 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { institution_id, redirect_url, reference } = await request.json()
+    const { institution_id, redirect_url, reference, agreement_options } = await request.json()
 
     if (!institution_id || !redirect_url || !reference) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
     const supabase = await createClient()
-
     const isSandbox = institution_id === "SANDBOXFINANCE_SFIN0000"
 
     let institutionData: any
@@ -24,7 +23,6 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (sandboxError || !existingSandbox) {
-        // Create sandbox institution if it doesn't exist
         const { data: newSandbox, error: createSandboxError } = await supabase
           .from("gocardless_institutions")
           .insert({
@@ -48,70 +46,67 @@ export async function POST(request: NextRequest) {
         institutionData = existingSandbox
       }
     } else {
-      const { data: institutionDataResult, error: institutionError } = await supabase
-        .from("gocardless_institutions")
-        .select("id, gocardless_id, name")
-        .eq("gocardless_id", institution_id)
-        .eq("is_active", true)
-        .single()
+      try {
+        const gcInstitutions = await gocardless.getInstitutions()
+        const gcInstitution = gcInstitutions.find((inst: any) => inst.id === institution_id)
 
-      if (institutionError || !institutionDataResult) {
-        console.log(`[v0] Institution ${institution_id} not found in database, fetching from GoCardless...`)
-
-        try {
-          const gcInstitutions = await gocardless.getInstitutions()
-          const gcInstitution = gcInstitutions.find((inst: any) => inst.id === institution_id)
-
-          if (!gcInstitution) {
-            return NextResponse.json(
-              { error: `Institution ${institution_id} not found in GoCardless` },
-              { status: 404 },
-            )
-          }
-
-          const { data: newInstitution, error: createError } = await supabase
-            .from("gocardless_institutions")
-            .insert({
-              gocardless_id: gcInstitution.id,
-              name: gcInstitution.name,
-              bic: gcInstitution.bic || null,
-              country: gcInstitution.countries?.[0] || "ES",
-              logo_url: gcInstitution.logo || null,
-              supported_features: gcInstitution.supported_features
-                ? JSON.stringify(gcInstitution.supported_features)
-                : null,
-              is_active: true,
-            })
-            .select("id, gocardless_id, name")
-            .single()
-
-          if (createError) {
-            console.error("[v0] Error creating institution:", createError)
-            return NextResponse.json({ error: "Error creating institution in database" }, { status: 500 })
-          }
-
-          institutionData = newInstitution
-          console.log(`[v0] Created new institution: ${institutionData.name}`)
-        } catch (gcError) {
-          console.error("[v0] Error fetching from GoCardless:", gcError)
-          return NextResponse.json({ error: "Error getting institution information" }, { status: 500 })
+        if (!gcInstitution) {
+          return NextResponse.json({ error: `Institution ${institution_id} not found in GoCardless` }, { status: 404 })
         }
-      } else {
-        institutionData = institutionDataResult
+
+        const { data: institutionRecord, error: institutionError } = await supabase
+          .from("gocardless_institutions")
+          .upsert({
+            gocardless_id: gcInstitution.id,
+            name: gcInstitution.name,
+            bic: gcInstitution.bic || null,
+            country: gcInstitution.countries?.[0] || "ES",
+            logo_url: gcInstitution.logo || null,
+            supported_features: gcInstitution.supported_features
+              ? JSON.stringify(gcInstitution.supported_features)
+              : null,
+            is_active: true,
+            transaction_total_days: gcInstitution.transaction_total_days || 90,
+            max_access_valid_for_days: gcInstitution.max_access_valid_for_days || 90,
+          })
+          .select("id, gocardless_id, name")
+          .single()
+
+        if (institutionError) {
+          console.error("[v0] Error upserting institution:", institutionError)
+          return NextResponse.json({ error: "Error saving institution" }, { status: 500 })
+        }
+
+        institutionData = institutionRecord
+      } catch (gcError) {
+        console.error("[v0] Error validating institution with GoCardless:", gcError)
+        return NextResponse.json({ error: "Institution validation failed" }, { status: 500 })
       }
     }
 
-    const requisition = await gocardless.createRequisition(institutionData.gocardless_id, redirect_url, {
+    const requisitionOptions: any = {
       reference: reference,
-      createAgreement: false, // Use default terms per GoCardless documentation
       userLanguage: "ES",
-    })
+    }
+
+    if (agreement_options) {
+      requisitionOptions.createAgreement = true
+      requisitionOptions.maxHistoricalDays = agreement_options.max_historical_days
+      requisitionOptions.accessValidForDays = agreement_options.access_valid_for_days
+      requisitionOptions.accessScope = agreement_options.access_scope
+    }
+
+    const requisition = await gocardless.createRequisition(
+      institutionData.gocardless_id,
+      redirect_url,
+      requisitionOptions,
+    )
 
     console.log("[v0] Requisition created - GoCardless ID:", requisition.id, "Our reference:", reference)
     console.log("[v0] Official GoCardless link:", requisition.link)
 
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 90)
+    expiresAt.setDate(expiresAt.getDate() + (agreement_options?.access_valid_for_days || 90))
 
     const { error: dbError } = await supabase.from("gocardless_requisitions").insert({
       gocardless_id: requisition.id,
@@ -124,6 +119,7 @@ export async function POST(request: NextRequest) {
       accounts: requisition.accounts || [],
       expires_at: expiresAt.toISOString(),
       created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     })
 
     if (dbError) {
@@ -134,11 +130,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       requisition_id: requisition.id,
-      link: requisition.link, // This is the official GoCardless link users should follow
+      link: requisition.link,
       reference: requisition.reference,
       institution: institutionData,
       expires: expiresAt,
       sandbox: isSandbox,
+      agreement_id: requisition.agreement,
     })
   } catch (error) {
     console.error("[v0] Error creating requisition:", error)

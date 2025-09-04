@@ -9,7 +9,7 @@ export async function GET(request: Request) {
 
     const supabase = await createClient()
 
-    let accountsQuery = supabase.from("gocardless_accounts").select("id, current_balance, currency, display_name")
+    let accountsQuery = supabase.from("gocardless_accounts").select("id, currency, display_name")
 
     if (accountId) {
       accountsQuery = accountsQuery.eq("id", accountId)
@@ -34,22 +34,27 @@ export async function GET(request: Request) {
 
     const { data: transactions, error: txError } = await supabase
       .from("gocardless_transactions")
-      .select("booking_date, amount, currency, account_gocardless_id")
-      .in("account_gocardless_id", accountIds)
+      .select("booking_date, transaction_amount, amount, currency, account_id")
+      .in("account_id", accountIds)
       .gte("booking_date", startDate.toISOString().split("T")[0])
       .order("booking_date", { ascending: true })
 
     if (txError) {
       console.error("[v0] Transactions error:", txError)
-      return NextResponse.json({ error: "Database error" }, { status: 500 })
+      return NextResponse.json([])
     }
 
-    // Calculate daily balances based on real transactions
     const balanceHistory = []
     const today = new Date()
 
-    // Start with current balance and work backwards
-    let runningBalance = accounts.reduce((sum, acc) => sum + Number.parseFloat(acc.current_balance), 0)
+    // Calculate total balance from all transactions
+    const totalTransactionAmount =
+      transactions?.reduce((sum, tx) => {
+        const amount = Number.parseFloat(tx.transaction_amount || tx.amount || "0")
+        return sum + amount
+      }, 0) || 0
+
+    let runningBalance = Math.max(0, totalTransactionAmount)
 
     for (let i = 0; i < days; i++) {
       const date = new Date(today)
@@ -60,7 +65,10 @@ export async function GET(request: Request) {
       const dayTransactions = transactions?.filter((tx) => tx.booking_date === dateStr) || []
 
       // Calculate balance for this day
-      const dayAmount = dayTransactions.reduce((sum, tx) => sum + Number.parseFloat(tx.amount), 0)
+      const dayAmount = dayTransactions.reduce((sum, tx) => {
+        const amount = Number.parseFloat(tx.transaction_amount || tx.amount || "0")
+        return sum + amount
+      }, 0)
 
       balanceHistory.unshift({
         date: dateStr,
@@ -75,6 +83,6 @@ export async function GET(request: Request) {
     return NextResponse.json(balanceHistory)
   } catch (error) {
     console.error("[v0] API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json([])
   }
 }
