@@ -47,7 +47,7 @@ export default function SettingsPage() {
     },
     sync: {
       autoSync: true,
-      syncFrequency: "hourly",
+      syncFrequency: "smart_daily",
       lastSync: new Date().toISOString(),
     },
     security: {
@@ -226,12 +226,19 @@ export default function SettingsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="15min">Cada 15 minutos</SelectItem>
-                    <SelectItem value="hourly">Cada hora</SelectItem>
-                    <SelectItem value="daily">Diariamente</SelectItem>
-                    <SelectItem value="weekly">Semanalmente</SelectItem>
+                    <SelectItem value="smart_daily">Sincronización Inteligente (3x/día)</SelectItem>
+                    <SelectItem value="daily_morning">Solo Mañana (04:00)</SelectItem>
+                    <SelectItem value="daily_evening">Solo Noche (21:00)</SelectItem>
+                    <SelectItem value="manual">Solo Manual</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {settings.sync.syncFrequency === "smart_daily" &&
+                    "04:00 (completa), 12:00 (media), 21:00 (básica) - Respeta límites de 10 requests/día por cuenta"}
+                  {settings.sync.syncFrequency === "daily_morning" && "Una sincronización completa diaria a las 04:00"}
+                  {settings.sync.syncFrequency === "daily_evening" && "Una sincronización básica diaria a las 21:00"}
+                  {settings.sync.syncFrequency === "manual" && "Sin sincronización automática. Solo manual."}
+                </p>
               </div>
 
               <div className="space-y-2">
