@@ -115,7 +115,6 @@ export async function POST(request: NextRequest) {
       status: requisition.status,
       redirect_url: redirect_url,
       link: requisition.link,
-      agreement_id: requisition.agreement,
       expires_at: expiresAt.toISOString(),
     })
 
