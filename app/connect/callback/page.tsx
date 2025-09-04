@@ -59,63 +59,98 @@ export default function CallbackPage() {
       setMessage("Verificando autorización...")
       await new Promise((resolve) => setTimeout(resolve, 1000))
 
-      // Verificar estado de la requisition
       setProgress(50)
-      setMessage("Obteniendo información de cuentas...")
+      setMessage("Esperando confirmación del banco...")
 
-      console.log("[v0] About to fetch requisition status from:", `/api/requisitions/status/${ref}`)
-      const res = await fetch(`/api/requisitions/status/${ref}`)
-      console.log("[v0] Status API response status:", res.status, res.statusText)
+      let attempts = 0
+      const maxAttempts = 12 // 2 minutes total (12 * 10 seconds)
+      let requisitionStatus = null
 
-      if (!res.ok) {
-        console.log("[v0] Status API failed with status:", res.status)
-        throw new Error(`Status API failed: ${res.status}`)
-      }
+      while (attempts < maxAttempts) {
+        console.log(`[v0] Polling attempt ${attempts + 1}/${maxAttempts} for requisition status`)
 
-      const data = await res.json()
-      console.log("[v0] Requisition status response:", data)
+        try {
+          const res = await fetch(`/api/requisitions/status/${ref}`)
+          console.log("[v0] Status API response status:", res.status, res.statusText)
 
-      if (data.status === "LN") {
-        console.log("[v0] Status is LN (Linked), proceeding with account fetch")
-        setProgress(75)
-        setMessage("Configurando cuentas...")
+          if (!res.ok) {
+            console.log("[v0] Status API failed with status:", res.status)
+            throw new Error(`Status API failed: ${res.status}`)
+          }
 
-        // Autorización exitosa, obtener cuentas
-        console.log("[v0] About to fetch accounts from:", `/api/requisitions/accounts/${ref}`)
-        const accountsRes = await fetch(`/api/requisitions/accounts/${ref}`)
-        console.log("[v0] Accounts API response status:", accountsRes.status, accountsRes.statusText)
+          const data = await res.json()
+          console.log("[v0] Requisition status response:", data)
 
-        if (!accountsRes.ok) {
-          console.log("[v0] Accounts API failed with status:", accountsRes.status)
-          throw new Error(`Accounts API failed: ${accountsRes.status}`)
+          if (data.status === "LN") {
+            console.log("[v0] Status is LN (Linked), breaking polling loop")
+            requisitionStatus = data
+            break
+          } else if (data.status === "RJ") {
+            console.log("[v0] Status is RJ (Rejected), breaking polling loop")
+            setStatus("error")
+            setMessage("La autorización fue rechazada por el banco")
+            return
+          } else {
+            console.log("[v0] Status not ready yet:", data.status, "- continuing to poll")
+            attempts++
+
+            // Update progress and message during polling
+            const progressIncrement = Math.min(25, (attempts / maxAttempts) * 25)
+            setProgress(50 + progressIncrement)
+            setMessage(`Esperando confirmación del banco... (${attempts}/${maxAttempts})`)
+
+            if (attempts < maxAttempts) {
+              await new Promise((resolve) => setTimeout(resolve, 10000)) // Wait 10 seconds between attempts
+            }
+          }
+        } catch (pollError) {
+          console.log(`[v0] Error in polling attempt ${attempts + 1}:`, pollError)
+          attempts++
+          if (attempts < maxAttempts) {
+            await new Promise((resolve) => setTimeout(resolve, 10000)) // Wait 10 seconds before retry
+          }
         }
-
-        const accountsData = await accountsRes.json()
-        console.log("[v0] Accounts data:", accountsData)
-
-        setProgress(100)
-        setAccounts(accountsData.accounts)
-        setStatus("success")
-        setMessage("¡Conexión exitosa! Tus cuentas han sido vinculadas.")
-
-        // Iniciar sincronización inicial
-        setTimeout(() => {
-          console.log("[v0] Starting initial sync")
-          fetch("/api/sync/initial", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ accounts: accountsData.accounts }),
-          })
-        }, 2000)
-      } else if (data.status === "RJ") {
-        console.log("[v0] Status is RJ (Rejected)")
-        setStatus("error")
-        setMessage("La autorización fue rechazada por el banco")
-      } else {
-        console.log("[v0] Unknown status received:", data.status)
-        setStatus("error")
-        setMessage(`Estado de autorización desconocido: ${data.status || "undefined"}`)
       }
+
+      if (!requisitionStatus) {
+        console.log("[v0] Polling timeout - requisition status never became LN")
+        setStatus("error")
+        setMessage("Tiempo de espera agotado. La autorización puede estar pendiente. Intenta de nuevo en unos minutos.")
+        return
+      }
+
+      // If we reach here, status is LN
+      console.log("[v0] Status is LN (Linked), proceeding with account fetch")
+      setProgress(75)
+      setMessage("Configurando cuentas...")
+
+      // Autorización exitosa, obtener cuentas
+      console.log("[v0] About to fetch accounts from:", `/api/requisitions/accounts/${ref}`)
+      const accountsRes = await fetch(`/api/requisitions/accounts/${ref}`)
+      console.log("[v0] Accounts API response status:", accountsRes.status, accountsRes.statusText)
+
+      if (!accountsRes.ok) {
+        console.log("[v0] Accounts API failed with status:", accountsRes.status)
+        throw new Error(`Accounts API failed: ${accountsRes.status}`)
+      }
+
+      const accountsData = await accountsRes.json()
+      console.log("[v0] Accounts data:", accountsData)
+
+      setProgress(100)
+      setAccounts(accountsData.accounts)
+      setStatus("success")
+      setMessage("¡Conexión exitosa! Tus cuentas han sido vinculadas.")
+
+      // Iniciar sincronización inicial
+      setTimeout(() => {
+        console.log("[v0] Starting initial sync")
+        fetch("/api/sync/initial", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accounts: accountsData.accounts }),
+        })
+      }, 2000)
     } catch (error) {
       console.log("[v0] Error in callback processing:", error)
       console.log("[v0] Error details:", error instanceof Error ? error.message : String(error))

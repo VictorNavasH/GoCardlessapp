@@ -32,11 +32,39 @@ class GoCardlessClient {
       )
     }
 
+    // Check if current token is still valid
     if (this.token && Date.now() < this.token.access_expires * 1000) {
       return this.token.access
     }
 
-    console.log("[v0] Getting GoCardless access token...")
+    // Try to refresh token if we have a valid refresh token
+    if (this.token && this.token.refresh && Date.now() < this.token.refresh_expires * 1000) {
+      console.log("[v0] Refreshing GoCardless access token...")
+      try {
+        const refreshResponse = await fetch(`${GOCARDLESS_BASE_URL}/api/v2/token/refresh/`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            refresh: this.token.refresh,
+          }),
+        })
+
+        if (refreshResponse.ok) {
+          this.token = await refreshResponse.json()
+          console.log("[v0] Access token refreshed successfully")
+          return this.token.access
+        } else {
+          console.log("[v0] Token refresh failed, getting new token...")
+        }
+      } catch (error) {
+        console.log("[v0] Token refresh error, getting new token:", error)
+      }
+    }
+
+    // Get new token if refresh failed or no refresh token available
+    console.log("[v0] Getting new GoCardless access token...")
     console.log("[v0] Using official GoCardless sandbox URL:", GOCARDLESS_BASE_URL)
     console.log("[v0] Secret ID configured:", !!SECRET_ID)
     console.log("[v0] Secret Key configured:", !!SECRET_KEY)
@@ -94,6 +122,32 @@ class GoCardlessClient {
           ...options.headers,
         },
       })
+
+      if (response.status === 401) {
+        console.log("[v0] Token expired, clearing cache and retrying...")
+        this.token = null // Clear cached token
+
+        // Retry with fresh token
+        const newToken = await this.getAccessToken()
+        const retryResponse = await fetch(`${GOCARDLESS_BASE_URL}${endpoint}`, {
+          ...options,
+          headers: {
+            Authorization: `Bearer ${newToken}`,
+            "Content-Type": "application/json",
+            ...options.headers,
+          },
+        })
+
+        if (!retryResponse.ok) {
+          const errorText = await retryResponse.text()
+          console.error(`[v0] GoCardless API Error after retry: ${retryResponse.status}`, errorText)
+          throw new Error(`GoCardless API Error: ${retryResponse.status} ${retryResponse.statusText} - ${errorText}`)
+        }
+
+        const data = await retryResponse.json()
+        console.log("[v0] GoCardless request successful after token refresh")
+        return data
+      }
 
       this.rateLimitInfo = {
         limit: response.headers.get("HTTP_X_RATELIMIT_LIMIT")
