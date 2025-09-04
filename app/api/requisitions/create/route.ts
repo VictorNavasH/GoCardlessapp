@@ -126,7 +126,19 @@ export async function POST(request: NextRequest) {
       console.error("[v0] - Details:", dbError.details)
       console.error("[v0] - Hint:", dbError.hint)
       console.error("[v0] - Full error object:", JSON.stringify(dbError, null, 2))
-      return NextResponse.json({ error: "Error saving requisition to database" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Error saving requisition to database",
+          supabase_error: {
+            code: dbError.code,
+            message: dbError.message,
+            details: dbError.details,
+            hint: dbError.hint,
+            full_error: dbError,
+          },
+        },
+        { status: 500 },
+      )
     }
 
     return NextResponse.json({
