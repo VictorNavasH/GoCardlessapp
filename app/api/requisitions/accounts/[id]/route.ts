@@ -4,13 +4,29 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const requisitionId = params.id
+    const reference = params.id
+    console.log("[v0] Accounts API called with reference:", reference)
 
-    const requisition = await gocardless.getRequisition(requisitionId)
+    const supabase = await createClient()
+    const { data: requisitionData, error: dbError } = await supabase
+      .from("gocardless_requisitions")
+      .select("gocardless_id")
+      .eq("reference", reference)
+      .single()
+
+    if (dbError || !requisitionData) {
+      console.error("[v0] Failed to find requisition in database:", dbError)
+      return NextResponse.json({ error: "Requisition not found" }, { status: 404 })
+    }
+
+    const gocardlessRequisitionId = requisitionData.gocardless_id
+    console.log("[v0] Found GoCardless requisition ID:", gocardlessRequisitionId)
+
+    const requisition = await gocardless.getRequisition(gocardlessRequisitionId)
 
     if (!requisition.accounts || requisition.accounts.length === 0) {
       return NextResponse.json({
-        requisition_id: requisitionId,
+        requisition_id: reference,
         accounts: [],
       })
     }
@@ -23,10 +39,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             gocardless.getAccountBalances(accountId),
           ])
 
-          const supabase = await createClient()
           const { error: dbError } = await supabase.from("gocardless_accounts").upsert({
             gocardless_id: accountId,
-            requisition_id: requisitionId,
+            requisition_id: reference,
             iban: accountDetails.iban,
             name: accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
             currency: accountDetails.currency,
@@ -57,12 +72,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const validAccounts = accountsWithDetails.filter((account) => account !== null)
 
     console.log("[v0] Retrieved accounts for requisition:", {
-      requisitionId,
+      reference,
+      gocardlessRequisitionId,
       accountCount: validAccounts.length,
     })
 
     return NextResponse.json({
-      requisition_id: requisitionId,
+      requisition_id: reference,
       accounts: validAccounts,
     })
   } catch (error) {
