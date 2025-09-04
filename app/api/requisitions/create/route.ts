@@ -116,10 +116,7 @@ export async function POST(request: NextRequest) {
       redirect_url: redirect_url,
       link: requisition.link,
       agreement_id: requisition.agreement,
-      accounts: requisition.accounts || [],
       expires_at: expiresAt.toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     })
 
     if (dbError) {

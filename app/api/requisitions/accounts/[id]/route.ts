@@ -50,6 +50,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             balance: balances.balances?.[0]?.balanceAmount?.amount || "0",
           })
 
+          console.log("[v0] About to execute upsert operation")
+          console.log("[v0] Supabase client ready:", !!supabase)
+
           const { data: upsertData, error: dbError } = await supabase.from("gocardless_accounts").upsert({
             gocardless_id: accountId,
             requisition_id: requisitionUuid,
@@ -57,8 +60,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
             name: accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
             currency: accountDetails.currency,
             balance: balances.balances?.[0]?.balanceAmount?.amount || "0",
+            status: "ACTIVE", // Añadiendo status explícito
             updated_at: new Date().toISOString(),
           })
+
+          console.log("[v0] Upsert operation completed")
+          console.log("[v0] Upsert result data:", upsertData)
+          console.log("[v0] Upsert error:", dbError)
 
           if (dbError) {
             console.error("[v0] Database error saving account:", {
@@ -68,12 +76,25 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
               details: dbError.details,
               hint: dbError.hint,
             })
+            console.log("[v0] Checking if table exists...")
+            const { data: tableCheck, error: tableError } = await supabase
+              .from("gocardless_accounts")
+              .select("count")
+              .limit(1)
+            console.log("[v0] Table check result:", { tableCheck, tableError })
           } else {
             console.log("[v0] Successfully saved account to database:", {
               accountId,
               upsertData,
               requisitionUuid,
             })
+
+            const { data: verifyData, error: verifyError } = await supabase
+              .from("gocardless_accounts")
+              .select("*")
+              .eq("gocardless_id", accountId)
+              .single()
+            console.log("[v0] Verification query result:", { verifyData, verifyError })
           }
 
           return {
