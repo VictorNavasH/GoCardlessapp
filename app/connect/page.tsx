@@ -100,10 +100,14 @@ export default function ConnectPage() {
   }
 
   const handleSandboxTest = async () => {
+    console.log("[v0] handleSandboxTest function called!")
+    console.log("[v0] Current loading state:", loading)
+
     setLoading(true)
     setAlert(null)
 
     try {
+      console.log("[v0] Making API call to create sandbox requisition...")
       const res = await fetch("/api/requisitions/create", {
         method: "POST",
         headers: {
@@ -192,7 +196,11 @@ export default function ConnectPage() {
                 </p>
               </div>
               <Button
-                onClick={handleSandboxTest}
+                onClick={() => {
+                  console.log("[v0] Sandbox button clicked!")
+                  console.log("[v0] Button disabled state:", loading)
+                  handleSandboxTest()
+                }}
                 disabled={loading}
                 variant="outline"
                 className="border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
