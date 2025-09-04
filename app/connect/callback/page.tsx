@@ -20,23 +20,32 @@ export default function CallbackPage() {
   const ref = searchParams.get("ref")
   const error = searchParams.get("error")
 
+  console.log("[v0] CallbackPage component loaded")
+  console.log("[v0] URL params - ref:", ref, "error:", error)
+  console.log("[v0] Full search params:", Object.fromEntries(searchParams.entries()))
+
   const [status, setStatus] = useState<"processing" | "success" | "error">("processing")
   const [message, setMessage] = useState("Procesando autorización...")
   const [accounts, setAccounts] = useState<Account[]>([])
   const [progress, setProgress] = useState(0)
 
   useEffect(() => {
+    console.log("[v0] useEffect triggered in callback page")
     processCallback()
   }, [])
 
   const processCallback = async () => {
+    console.log("[v0] processCallback function started")
+
     if (error) {
+      console.log("[v0] Error parameter found:", error)
       setStatus("error")
       setMessage("El usuario canceló la autorización o ocurrió un error en el banco")
       return
     }
 
     if (!ref) {
+      console.log("[v0] No ref parameter found")
       setStatus("error")
       setMessage("Referencia de requisition no encontrada")
       return
@@ -53,19 +62,35 @@ export default function CallbackPage() {
       // Verificar estado de la requisition
       setProgress(50)
       setMessage("Obteniendo información de cuentas...")
-      const res = await fetch(`/api/requisitions/status/${ref}`)
-      const data = await res.json()
 
+      console.log("[v0] About to fetch requisition status from:", `/api/requisitions/status/${ref}`)
+      const res = await fetch(`/api/requisitions/status/${ref}`)
+      console.log("[v0] Status API response status:", res.status, res.statusText)
+
+      if (!res.ok) {
+        console.log("[v0] Status API failed with status:", res.status)
+        throw new Error(`Status API failed: ${res.status}`)
+      }
+
+      const data = await res.json()
       console.log("[v0] Requisition status response:", data)
 
       if (data.status === "LN") {
+        console.log("[v0] Status is LN (Linked), proceeding with account fetch")
         setProgress(75)
         setMessage("Configurando cuentas...")
 
         // Autorización exitosa, obtener cuentas
+        console.log("[v0] About to fetch accounts from:", `/api/requisitions/accounts/${ref}`)
         const accountsRes = await fetch(`/api/requisitions/accounts/${ref}`)
-        const accountsData = await accountsRes.json()
+        console.log("[v0] Accounts API response status:", accountsRes.status, accountsRes.statusText)
 
+        if (!accountsRes.ok) {
+          console.log("[v0] Accounts API failed with status:", accountsRes.status)
+          throw new Error(`Accounts API failed: ${accountsRes.status}`)
+        }
+
+        const accountsData = await accountsRes.json()
         console.log("[v0] Accounts data:", accountsData)
 
         setProgress(100)
@@ -75,6 +100,7 @@ export default function CallbackPage() {
 
         // Iniciar sincronización inicial
         setTimeout(() => {
+          console.log("[v0] Starting initial sync")
           fetch("/api/sync/initial", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -82,14 +108,17 @@ export default function CallbackPage() {
           })
         }, 2000)
       } else if (data.status === "RJ") {
+        console.log("[v0] Status is RJ (Rejected)")
         setStatus("error")
         setMessage("La autorización fue rechazada por el banco")
       } else {
+        console.log("[v0] Unknown status received:", data.status)
         setStatus("error")
-        setMessage("Estado de autorización desconocido")
+        setMessage(`Estado de autorización desconocido: ${data.status || "undefined"}`)
       }
     } catch (error) {
       console.log("[v0] Error in callback processing:", error)
+      console.log("[v0] Error details:", error instanceof Error ? error.message : String(error))
       setStatus("error")
       setMessage("Error procesando la respuesta del banco")
     }
