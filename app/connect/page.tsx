@@ -100,6 +100,7 @@ export default function ConnectPage() {
   }
 
   const handleSandboxTest = async () => {
+    console.log("[v0] ===== SANDBOX BUTTON CLICKED =====")
     console.log("[v0] handleSandboxTest function called!")
     console.log("[v0] Current loading state:", loading)
 
@@ -196,11 +197,7 @@ export default function ConnectPage() {
                 </p>
               </div>
               <Button
-                onClick={() => {
-                  console.log("[v0] Sandbox button clicked!")
-                  console.log("[v0] Button disabled state:", loading)
-                  handleSandboxTest()
-                }}
+                onClick={handleSandboxTest}
                 disabled={loading}
                 variant="outline"
                 className="border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
