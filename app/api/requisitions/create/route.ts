@@ -61,13 +61,15 @@ export async function POST(request: NextRequest) {
             name: gcInstitution.name,
             bic: gcInstitution.bic || null,
             country: gcInstitution.countries?.[0] || "ES",
+            countries: gcInstitution.countries || [],
             logo_url: gcInstitution.logo || null,
-            supported_features: gcInstitution.supported_features
-              ? JSON.stringify(gcInstitution.supported_features)
-              : null,
-            is_active: true,
             transaction_total_days: gcInstitution.transaction_total_days || 90,
             max_access_valid_for_days: gcInstitution.max_access_valid_for_days || 90,
+            max_access_valid_for_days_reconfirmation: gcInstitution.max_access_valid_for_days_reconfirmation || 730,
+            supported_features: gcInstitution.supported_features || ["balances", "details", "transactions"],
+            supported_payments: gcInstitution.supported_payments || {},
+            identification_codes: gcInstitution.identification_codes || {},
+            is_active: true,
           })
           .select("id, gocardless_id, name")
           .single()
@@ -115,6 +117,9 @@ export async function POST(request: NextRequest) {
       status: requisition.status,
       redirect_url: redirect_url,
       link: requisition.link,
+      user_language: requisitionOptions.userLanguage || "ES",
+      account_selection: false,
+      redirect_immediate: false,
       expires_at: expiresAt.toISOString(),
     })
 
@@ -144,11 +149,10 @@ export async function POST(request: NextRequest) {
       success: true,
       requisition_id: requisition.id,
       link: requisition.link,
-      reference: requisition.reference,
+      reference: reference,
       institution: institutionData,
       expires: expiresAt,
       sandbox: isSandbox,
-      agreement_id: requisition.agreement,
     })
   } catch (error) {
     console.error("[v0] Error creating requisition:", error)

@@ -62,11 +62,11 @@ export async function GET(request: Request) {
 
         return {
           id: tx.id,
-          amount: Number.parseFloat(tx.transaction_amount || tx.amount || "0"),
+          amount: Number.parseFloat(tx.amount || "0"), // Corregido de transaction_amount a amount
           currency: tx.currency || "EUR",
           description: tx.remittance_information_unstructured || tx.creditor_name || "Transacción",
           date: tx.booking_date,
-          type: Number.parseFloat(tx.transaction_amount || tx.amount || "0") >= 0 ? "credit" : "debit",
+          type: Number.parseFloat(tx.amount || "0") >= 0 ? "credit" : "debit", // Corregido de transaction_amount a amount
           account_name: account?.display_name || "Cuenta",
           institution_name: account?.institution_name || "Banco",
         }

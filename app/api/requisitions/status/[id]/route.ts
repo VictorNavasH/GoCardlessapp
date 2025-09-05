@@ -16,7 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const supabase = await createClient()
     const { data: requisitionRecord, error: dbError } = await supabase
       .from("gocardless_requisitions")
-      .select("gocardless_id, status, accounts")
+      .select("gocardless_id, status, accounts, linked_at")
       .eq("reference", reference)
       .single()
 
@@ -45,6 +45,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .update({
         status: requisition.status,
         accounts: requisition.accounts || [],
+        linked_at: requisition.status === "LN" ? new Date().toISOString() : requisitionRecord.linked_at,
         updated_at: new Date().toISOString(),
       })
       .eq("reference", reference)

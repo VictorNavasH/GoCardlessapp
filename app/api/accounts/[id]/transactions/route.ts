@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { data: localTransactions, error: localError } = await supabase
       .from("gocardless_transactions")
       .select("*")
-      .eq("account_id", accountId)
+      .eq("account_gocardless_id", accountId) // Usando account_gocardless_id en lugar de account_id para buscar por GoCardless ID
       .order("booking_date", { ascending: false })
 
     if (!localError && localTransactions && localTransactions.length > 0) {
@@ -35,11 +35,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         id: tx.gocardless_id,
         amount: Number.parseFloat(tx.amount || "0"),
         currency: tx.currency || account.currency,
-        description: tx.description || "Sin descripción",
+        description: tx.remittance_information_unstructured || "Sin descripción", // Usando campo correcto del esquema
         date: tx.booking_date || new Date().toISOString(),
         type: Number.parseFloat(tx.amount || "0") >= 0 ? "credit" : "debit",
-        category: tx.category || "General",
-        reference: tx.reference || tx.gocardless_id,
+        category: tx.bank_transaction_code || "General", // Usando campo correcto del esquema
+        reference: tx.transaction_id || tx.gocardless_id, // Usando campo correcto del esquema
         creditorName: tx.creditor_name,
         debtorName: tx.debtor_name,
       }))

@@ -54,19 +54,37 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           console.log("[v0] Supabase client ready:", !!supabase)
 
           const currentBalance = Number.parseFloat(balances.balances?.[0]?.balanceAmount?.amount || "0")
+          const availableBalance = balances.balances?.find((b) => b.balanceType === "interimAvailable")?.balanceAmount
+            ?.amount
+          const creditLimit = balances.balances?.find((b) => b.balanceType === "creditLimit")?.balanceAmount?.amount
 
           const accountDataToSave = {
             gocardless_id: accountId,
             requisition_id: requisitionUuid,
             institution_id: requisitionData.institution_id,
             iban: accountDetails.iban || null,
+            bban: accountDetails.bban || null,
+            pan: accountDetails.pan || null,
+            masked_pan: accountDetails.maskedPan || null,
+            msisdn: accountDetails.msisdn || null,
             name: accountDetails.name || null,
             display_name: accountDetails.displayName || accountDetails.name || `Cuenta ${accountId.slice(-4)}`,
+            product: accountDetails.product || null,
+            account_type: accountDetails.accountType || null,
+            cash_account_type: accountDetails.cashAccountType || null,
+            owner_name: accountDetails.ownerName || null,
+            owner_address: accountDetails.ownerAddress ? JSON.stringify(accountDetails.ownerAddress) : null,
             currency: accountDetails.currency || "EUR",
             balance_amount: currentBalance,
+            balance_currency: balances.balances?.[0]?.balanceAmount?.currency || "EUR",
+            available_balance: availableBalance ? Number.parseFloat(availableBalance) : null,
+            credit_limit: creditLimit ? Number.parseFloat(creditLimit) : null,
             current_balance: currentBalance,
-            status: "ACTIVE",
+            status: accountDetails.status || "ACTIVE",
+            usage: accountDetails.usage || null,
+            details: accountDetails.details ? JSON.stringify(accountDetails.details) : JSON.stringify(accountDetails),
             balance_last_updated_at: new Date().toISOString(),
+            last_sync_at: new Date().toISOString(),
           }
 
           console.log("[v0] Attempting to save account to database:", accountDataToSave)

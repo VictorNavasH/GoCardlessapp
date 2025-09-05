@@ -14,8 +14,14 @@ export interface Institution {
   name: string
   bic?: string
   country: string
+  countries?: string[]
   logo_url?: string
-  supported_features?: any
+  transaction_total_days?: number
+  max_access_valid_for_days?: number
+  max_access_valid_for_days_reconfirmation?: number
+  supported_features?: string[]
+  supported_payments?: any
+  identification_codes?: any
   is_active: boolean
   created_at: string
   updated_at: string
@@ -27,15 +33,17 @@ export interface Requisition {
   institution_id: string
   reference: string
   status: "CR" | "LN" | "RJ" | "EX" | "SU" | "GA"
-  agreement_id?: string
-  redirect_url?: string
+  redirect_url: string
   link?: string
   accounts?: any[]
-  user_id?: string
-  created_at: string
-  updated_at: string
+  user_language?: string
+  account_selection?: boolean
+  redirect_immediate?: boolean
+  ssn?: string
   expires_at?: string
   linked_at?: string
+  created_at: string
+  updated_at: string
   institution?: Institution
 }
 
@@ -70,32 +78,45 @@ export interface Transaction {
   id: string
   gocardless_id: string
   account_id: string
-  booking_date: string
-  value_date?: string
-  amount: number
-  currency: string
-  exchange_rate?: number
-  original_amount?: number
-  original_currency?: string
-  transaction_code?: string
-  bank_transaction_code?: string
-  proprietary_bank_transaction_code?: string
-  description?: string
-  remittance_information_unstructured?: string
-  remittance_information_structured?: any
-  additional_information?: string
-  creditor_name?: string
-  creditor_account_iban?: string
-  creditor_agent_bic?: string
-  creditor_id?: string
-  debtor_name?: string
-  debtor_account_iban?: string
-  debtor_agent_bic?: string
+  account_gocardless_id: string
+  transaction_id?: string
   end_to_end_id?: string
   mandate_id?: string
   cheque_number?: string
+  clearing_system_reference?: string
+  booking_date: string
+  value_date?: string
+  amount: string
+  currency: string
+  exchange_rate?: number
+  original_amount?: string
+  original_currency?: string
+  bank_transaction_code?: string
+  proprietary_bank_transaction_code?: string
+  transaction_code?: string
+  creditor_name?: string
+  creditor_account_iban?: string
+  creditor_account_bban?: string
+  creditor_agent_bic?: string
+  creditor_agent_name?: string
+  creditor_id?: string
+  ultimate_creditor?: string
+  debtor_name?: string
+  debtor_account_iban?: string
+  debtor_account_bban?: string
+  debtor_agent_bic?: string
+  debtor_agent_name?: string
+  debtor_id?: string
+  ultimate_debtor?: string
+  remittance_information_unstructured?: string
+  remittance_information_structured?: any
+  additional_information?: string
   creditor_reference?: string
-  balance_after_transaction?: number
+  balance_after_transaction?: any
+  purpose_code?: string
+  merchant_category_code?: string
+  entry_reference?: string
+  additional_information_structured?: any
   raw_data?: any
   created_at: string
   updated_at: string
@@ -285,7 +306,7 @@ export class DatabaseService {
     const { data, error } = await this.supabase
       .from("gocardless_transactions")
       .select(`
-        *,
+        amount,
         account:gocardless_accounts!inner(user_id)
       `)
       .eq("account.user_id", userId)
