@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -23,7 +23,7 @@ const institutions = [
   { id: "CAIXESBBXXX", name: "CaixaBank" },
 ]
 
-export default function BankSimulator() {
+function BankSimulatorContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const requisition_id = searchParams.get("requisition_id")
@@ -124,5 +124,19 @@ export default function BankSimulator() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function BankSimulator() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-blue-50 flex items-center justify-center">
+          <div className="text-center">Cargando...</div>
+        </div>
+      }
+    >
+      <BankSimulatorContent />
+    </Suspense>
   )
 }

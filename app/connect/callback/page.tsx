@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Layout from "../../../components/layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,7 +14,7 @@ interface Account {
   iban: string
 }
 
-export default function CallbackPage() {
+function CallbackPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -316,5 +316,24 @@ export default function CallbackPage() {
         </div>
       </div>
     </Layout>
+  )
+}
+
+export default function CallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <Layout>
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p>Cargando...</p>
+            </div>
+          </div>
+        </Layout>
+      }
+    >
+      <CallbackPageContent />
+    </Suspense>
   )
 }
