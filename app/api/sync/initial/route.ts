@@ -122,51 +122,55 @@ export async function POST(request: NextRequest) {
           console.log(`[v0] - Value Date: ${tx.valueDate}`)
           console.log(`[v0] - Description: ${tx.remittanceInformationUnstructured || tx.additionalInformation}`)
 
-          const processedTx = tx
+          const processedTx = { ...tx }
 
-          // Si los campos principales están vacíos pero hay raw_data, extraer información de ahí
-          if (!tx.creditorName && !tx.debtorName && !tx.remittanceInformationUnstructured && tx.raw_data) {
-            console.log(`[v0] Detected CaixaBank format for transaction ${index + 1}, processing raw_data`)
+          // Detectar si es formato CaixaBank/Sabadell (campos principales vacíos pero raw_data presente)
+          const isCaixaBankFormat =
+            !tx.creditorName &&
+            !tx.debtorName &&
+            !tx.remittanceInformationUnstructured &&
+            (tx.raw_data || (typeof tx === "object" && tx.remittanceInformationUnstructuredArray))
+
+          if (isCaixaBankFormat) {
+            console.log(`[v0] Detected CaixaBank/Sabadell format for transaction ${index + 1}, processing raw_data`)
+
             try {
-              const rawData = typeof tx.raw_data === "string" ? JSON.parse(tx.raw_data) : tx.raw_data
+              // Si raw_data es string, parsearlo; si no, usar el objeto directamente
+              let rawData = tx.raw_data
+              if (typeof rawData === "string") {
+                rawData = JSON.parse(rawData)
+              } else if (!rawData && tx.remittanceInformationUnstructuredArray) {
+                // Usar datos directos del objeto si no hay raw_data
+                rawData = tx
+              }
 
-              // Extraer información de remittanceInformationUnstructuredArray
+              // Extraer descripción de remittanceInformationUnstructuredArray
               if (
-                rawData.remittanceInformationUnstructuredArray &&
+                rawData?.remittanceInformationUnstructuredArray &&
                 Array.isArray(rawData.remittanceInformationUnstructuredArray)
               ) {
                 processedTx.remittanceInformationUnstructured = rawData.remittanceInformationUnstructuredArray.join(" ")
-                console.log(
-                  `[v0] Extracted description from raw_data: ${processedTx.remittanceInformationUnstructured}`,
-                )
+                console.log(`[v0] Extracted description: ${processedTx.remittanceInformationUnstructured}`)
               }
 
-              // Usar datos del raw_data si están disponibles
-              if (rawData.transactionAmount) {
-                processedTx.transactionAmount = rawData.transactionAmount
+              // Extraer otros campos útiles del raw_data
+              if (rawData?.creditorName) processedTx.creditorName = rawData.creditorName
+              if (rawData?.debtorName) processedTx.debtorName = rawData.debtorName
+              if (rawData?.ultimateCreditor) processedTx.ultimateCreditor = rawData.ultimateCreditor
+              if (rawData?.ultimateDebtor) processedTx.ultimateDebtor = rawData.ultimateDebtor
+              if (rawData?.creditorAccount?.iban) {
+                processedTx.creditorAccount = { iban: rawData.creditorAccount.iban }
               }
-              if (rawData.bookingDate) {
-                processedTx.bookingDate = rawData.bookingDate
+              if (rawData?.debtorAccount?.iban) {
+                processedTx.debtorAccount = { iban: rawData.debtorAccount.iban }
               }
-              if (rawData.valueDate) {
-                processedTx.valueDate = rawData.valueDate
-              }
-              if (rawData.transactionId) {
-                processedTx.transactionId = rawData.transactionId
-              }
-              if (rawData.entryReference) {
-                processedTx.entryReference = rawData.entryReference
-              }
-              if (rawData.bankTransactionCode) {
-                processedTx.bankTransactionCode = rawData.bankTransactionCode
-              }
-              if (rawData.proprietaryBankTransactionCode) {
-                processedTx.proprietaryBankTransactionCode = rawData.proprietaryBankTransactionCode
-              }
+              if (rawData?.mandateId) processedTx.mandateId = rawData.mandateId
+              if (rawData?.creditorId) processedTx.creditorId = rawData.creditorId
+              if (rawData?.endToEndId) processedTx.endToEndId = rawData.endToEndId
 
-              console.log(`[v0] Enhanced transaction data from raw_data:`, JSON.stringify(processedTx, null, 2))
+              console.log(`[v0] Enhanced transaction data:`, JSON.stringify(processedTx, null, 2))
             } catch (parseError) {
-              console.error(`[v0] Error parsing raw_data for transaction ${index + 1}:`, parseError)
+              console.error(`[v0] Error processing CaixaBank/Sabadell format for transaction ${index + 1}:`, parseError)
             }
           }
 
