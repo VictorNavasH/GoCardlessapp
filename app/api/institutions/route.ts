@@ -23,6 +23,15 @@ export async function GET(request: Request) {
     console.log(`[v0] Institutions fetched: ${institutions?.length || 0} institutions for country ${country}`)
     if (institutions && institutions.length > 0) {
       console.log(`[v0] Available institutions: ${institutions.map((i) => i.name).join(", ")}`)
+      const caixabank = institutions.find((i) => i.name.toLowerCase().includes("caixabank"))
+      if (caixabank) {
+        console.log(
+          `[v0] CaixaBank found in database: ID=${caixabank.id}, Name=${caixabank.name}, BIC=${caixabank.bic}`,
+        )
+      } else {
+        console.log(`[v0] CaixaBank NOT found in local database`)
+      }
+      console.log(`[v0] All institution IDs: ${institutions.map((i) => `${i.name}:${i.id}`).join(", ")}`)
     }
 
     return NextResponse.json(institutions || [])

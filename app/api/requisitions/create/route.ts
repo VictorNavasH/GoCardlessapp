@@ -48,122 +48,186 @@ export async function POST(request: NextRequest) {
     } else {
       try {
         console.log("[v0] Looking for institution:", institution_id)
+
+        const { data: localInstitution, error: localError } = await supabase
+          .from("gocardless_institutions")
+          .select("*")
+          .eq("id", institution_id) // Buscar por ID interno, no gocardless_id
+          .single()
+
+        if (localError && localError.code !== "PGRST116") {
+          console.error("[v0] Error querying local institution:", localError)
+          return NextResponse.json({ error: "Error querying institution" }, { status: 500 })
+        }
+
+        if (localInstitution) {
+          console.log(
+            "[v0] Institution found in local database:",
+            localInstitution.name,
+            "GoCardless ID:",
+            localInstitution.gocardless_id,
+          )
+        } else {
+          console.log("[v0] Institution NOT found in local database with ID:", institution_id)
+          return NextResponse.json(
+            { error: `Institution with ID ${institution_id} not found in local database` },
+            { status: 404 },
+          )
+        }
+
         const gcInstitutions = await gocardless.getInstitutions("ES")
         console.log("[v0] Found", gcInstitutions.length, "institutions from GoCardless for ES")
 
-        const gcInstitution = gcInstitutions.find((inst: any) => inst.id === institution_id)
-        console.log("[v0] Institution found in GoCardless:", !!gcInstitution)
+        // Buscar por el gocardless_id de la institución local
+        let gcInstitution = gcInstitutions.find((inst: any) => inst.id === localInstitution.gocardless_id)
+        console.log("[v0] Institution found in GoCardless by gocardless_id:", !!gcInstitution)
 
         if (!gcInstitution) {
-          console.log(
-            "[v0] Available institution IDs:",
-            gcInstitutions.slice(0, 5).map((inst: any) => inst.id),
+          console.log("[v0] Searching by name fallback for:", localInstitution.name)
+          gcInstitution = gcInstitutions.find(
+            (inst: any) =>
+              inst.name.toLowerCase().includes(localInstitution.name.toLowerCase()) ||
+              localInstitution.name.toLowerCase().includes(inst.name.toLowerCase()),
           )
-          return NextResponse.json({ error: `Institution ${institution_id} not found in GoCardless` }, { status: 404 })
+          console.log("[v0] Institution found by name:", !!gcInstitution)
+        }
+
+        if (!gcInstitution) {
+          console.log("[v0] Institution not found in GoCardless. Available institutions:")
+          gcInstitutions.slice(0, 10).forEach((inst: any) => {
+            console.log(`[v0] - ${inst.name} (${inst.id})`)
+          })
+
+          // Buscar instituciones similares para ayudar al debugging
+          const similarInsts = gcInstitutions.filter((inst: any) =>
+            inst.name.toLowerCase().includes(localInstitution.name.split(" ")[0].toLowerCase()),
+          )
+          if (similarInsts.length > 0) {
+            console.log("[v0] Similar institutions found:")
+            similarInsts.forEach((inst: any) => {
+              console.log(`[v0] - ${inst.name} (${inst.id})`)
+            })
+          }
+
+          return NextResponse.json(
+            {
+              error: `Institution ${localInstitution.name} not found in GoCardless`,
+              suggestions: similarInsts.slice(0, 3).map((inst: any) => ({ name: inst.name, id: inst.id })),
+            },
+            { status: 404 },
+          )
         }
 
         console.log("[v0] Found institution:", gcInstitution.name, "with ID:", gcInstitution.id)
 
-        const { data: institutionRecord, error: institutionError } = await supabase
-          .from("gocardless_institutions")
-          .upsert({
-            gocardless_id: gcInstitution.id,
-            name: gcInstitution.name,
-            bic: gcInstitution.bic || null,
-            country: gcInstitution.countries?.[0] || "ES",
-            countries: gcInstitution.countries || [],
-            logo_url: gcInstitution.logo || null,
-            transaction_total_days: gcInstitution.transaction_total_days || 90,
-            max_access_valid_for_days: gcInstitution.max_access_valid_for_days || 90,
-            max_access_valid_for_days_reconfirmation: gcInstitution.max_access_valid_for_days_reconfirmation || 730,
-            supported_features: gcInstitution.supported_features || ["balances", "details", "transactions"],
-            supported_payments: gcInstitution.supported_payments || {},
-            identification_codes: gcInstitution.identification_codes || {},
-            is_active: true,
-          })
-          .select("id, gocardless_id, name")
-          .single()
+        if (localInstitution.gocardless_id !== gcInstitution.id) {
+          console.log(
+            "[v0] Updating institution gocardless_id from",
+            localInstitution.gocardless_id,
+            "to",
+            gcInstitution.id,
+          )
 
-        if (institutionError) {
-          console.error("[v0] Error upserting institution:", institutionError)
-          return NextResponse.json({ error: "Error saving institution" }, { status: 500 })
+          const { error: updateError } = await supabase
+            .from("gocardless_institutions")
+            .update({
+              gocardless_id: gcInstitution.id,
+              name: gcInstitution.name,
+              bic: gcInstitution.bic || localInstitution.bic,
+              logo_url: gcInstitution.logo || localInstitution.logo_url,
+              transaction_total_days: gcInstitution.transaction_total_days || localInstitution.transaction_total_days,
+              max_access_valid_for_days:
+                gcInstitution.max_access_valid_for_days || localInstitution.max_access_valid_for_days,
+              supported_features: gcInstitution.supported_features || localInstitution.supported_features,
+            })
+            .eq("id", localInstitution.id)
+
+          if (updateError) {
+            console.error("[v0] Error updating institution:", updateError)
+          } else {
+            console.log("[v0] Institution updated successfully")
+          }
         }
 
-        institutionData = institutionRecord
+        institutionData = {
+          id: localInstitution.id,
+          gocardless_id: gcInstitution.id,
+          name: gcInstitution.name,
+        }
+
+        const requisitionOptions: any = {
+          reference: reference,
+          userLanguage: "ES",
+        }
+
+        if (agreement_options) {
+          requisitionOptions.createAgreement = true
+          requisitionOptions.maxHistoricalDays = agreement_options.max_historical_days
+          requisitionOptions.accessValidForDays = agreement_options.access_valid_for_days
+          requisitionOptions.accessScope = agreement_options.access_scope
+        }
+
+        const requisition = await gocardless.createRequisition(
+          institutionData.gocardless_id,
+          redirect_url,
+          requisitionOptions,
+        )
+
+        console.log("[v0] Requisition created - GoCardless ID:", requisition.id, "Our reference:", reference)
+        console.log("[v0] Official GoCardless link:", requisition.link)
+
+        const expiresAt = new Date()
+        expiresAt.setDate(expiresAt.getDate() + (agreement_options?.access_valid_for_days || 90))
+
+        const { error: dbError } = await supabase.from("gocardless_requisitions").insert({
+          gocardless_id: requisition.id,
+          institution_id: institutionData.id,
+          reference: reference,
+          status: requisition.status,
+          redirect_url: redirect_url,
+          link: requisition.link,
+          user_language: requisitionOptions.userLanguage || "ES",
+          account_selection: false,
+          redirect_immediate: false,
+          expires_at: expiresAt.toISOString(),
+        })
+
+        if (dbError) {
+          console.error("[v0] Database error details:")
+          console.error("[v0] - Code:", dbError.code)
+          console.error("[v0] - Message:", dbError.message)
+          console.error("[v0] - Details:", dbError.details)
+          console.error("[v0] - Hint:", dbError.hint)
+          console.error("[v0] - Full error object:", JSON.stringify(dbError, null, 2))
+          return NextResponse.json(
+            {
+              error: "Error saving requisition to database",
+              supabase_error: {
+                code: dbError.code,
+                message: dbError.message,
+                details: dbError.details,
+                hint: dbError.hint,
+                full_error: dbError,
+              },
+            },
+            { status: 500 },
+          )
+        }
+
+        return NextResponse.json({
+          success: true,
+          requisition_id: requisition.id,
+          link: requisition.link,
+          reference: reference,
+          institution: institutionData,
+          expires: expiresAt,
+          sandbox: isSandbox,
+        })
       } catch (gcError) {
         console.error("[v0] Error validating institution with GoCardless:", gcError)
         return NextResponse.json({ error: "Institution validation failed" }, { status: 500 })
       }
     }
-
-    const requisitionOptions: any = {
-      reference: reference,
-      userLanguage: "ES",
-    }
-
-    if (agreement_options) {
-      requisitionOptions.createAgreement = true
-      requisitionOptions.maxHistoricalDays = agreement_options.max_historical_days
-      requisitionOptions.accessValidForDays = agreement_options.access_valid_for_days
-      requisitionOptions.accessScope = agreement_options.access_scope
-    }
-
-    const requisition = await gocardless.createRequisition(
-      institutionData.gocardless_id,
-      redirect_url,
-      requisitionOptions,
-    )
-
-    console.log("[v0] Requisition created - GoCardless ID:", requisition.id, "Our reference:", reference)
-    console.log("[v0] Official GoCardless link:", requisition.link)
-
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + (agreement_options?.access_valid_for_days || 90))
-
-    const { error: dbError } = await supabase.from("gocardless_requisitions").insert({
-      gocardless_id: requisition.id,
-      institution_id: institutionData.id,
-      reference: reference,
-      status: requisition.status,
-      redirect_url: redirect_url,
-      link: requisition.link,
-      user_language: requisitionOptions.userLanguage || "ES",
-      account_selection: false,
-      redirect_immediate: false,
-      expires_at: expiresAt.toISOString(),
-    })
-
-    if (dbError) {
-      console.error("[v0] Database error details:")
-      console.error("[v0] - Code:", dbError.code)
-      console.error("[v0] - Message:", dbError.message)
-      console.error("[v0] - Details:", dbError.details)
-      console.error("[v0] - Hint:", dbError.hint)
-      console.error("[v0] - Full error object:", JSON.stringify(dbError, null, 2))
-      return NextResponse.json(
-        {
-          error: "Error saving requisition to database",
-          supabase_error: {
-            code: dbError.code,
-            message: dbError.message,
-            details: dbError.details,
-            hint: dbError.hint,
-            full_error: dbError,
-          },
-        },
-        { status: 500 },
-      )
-    }
-
-    return NextResponse.json({
-      success: true,
-      requisition_id: requisition.id,
-      link: requisition.link,
-      reference: reference,
-      institution: institutionData,
-      expires: expiresAt,
-      sandbox: isSandbox,
-    })
   } catch (error) {
     console.error("[v0] Error creating requisition:", error)
 
