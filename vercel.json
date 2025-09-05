@@ -1,9 +1,1 @@
-{
-  "_comment": "Cron job temporalmente desactivado para permitir deployment",
-  "_crons_disabled": [
-    {
-      "path": "/api/sync/scheduled",
-      "schedule": "0 4,12,21 * * *"
-    }
-  ]
-}
+{}
