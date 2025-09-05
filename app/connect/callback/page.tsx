@@ -141,22 +141,32 @@ export default function CallbackPage() {
 
       try {
         console.log("[v0] Starting initial sync for", accountsData.accounts.length, "accounts")
+        console.log("[v0] Accounts data being sent to sync:", JSON.stringify(accountsData.accounts, null, 2))
+
         const syncRes = await fetch("/api/sync/initial", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ accounts: accountsData.accounts }),
         })
 
+        console.log("[v0] Sync API response status:", syncRes.status, syncRes.statusText)
+        console.log("[v0] Sync API response headers:", Object.fromEntries(syncRes.headers.entries()))
+
         if (syncRes.ok) {
           const syncData = await syncRes.json()
           console.log("[v0] Initial sync completed successfully:", syncData)
           setMessage(`¡Conexión exitosa! Se sincronizaron ${syncData.transactions_imported || 0} transacciones.`)
         } else {
+          const errorText = await syncRes.text()
           console.log("[v0] Initial sync failed with status:", syncRes.status)
+          console.log("[v0] Initial sync error response:", errorText)
           setMessage("¡Conexión exitosa! Las transacciones se sincronizarán en segundo plano.")
         }
       } catch (syncError) {
         console.log("[v0] Error in initial sync:", syncError)
+        console.log("[v0] Error name:", syncError instanceof Error ? syncError.name : "Unknown")
+        console.log("[v0] Error message:", syncError instanceof Error ? syncError.message : String(syncError))
+        console.log("[v0] Error stack:", syncError instanceof Error ? syncError.stack : "No stack trace")
         setMessage("¡Conexión exitosa! Las transacciones se sincronizarán automáticamente.")
       }
 
