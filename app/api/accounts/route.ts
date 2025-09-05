@@ -42,12 +42,14 @@ export async function GET() {
         balance_last_updated_at: account.balance_last_updated_at || account.updated_at,
       })) || []
 
-    const activeAccounts = transformedAccounts.filter((account) => account.status === "ACTIVE")
+    const availableAccounts = transformedAccounts.filter(
+      (account) => account.status === "ACTIVE" || account.status === "READY",
+    )
 
     console.log("[v0] Transformed accounts:", transformedAccounts.length)
-    console.log("[v0] Active accounts:", activeAccounts.length)
+    console.log("[v0] Available accounts (ACTIVE + READY):", availableAccounts.length)
 
-    return NextResponse.json(activeAccounts)
+    return NextResponse.json(availableAccounts)
   } catch (error) {
     console.error("[v0] Error fetching accounts:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

@@ -57,13 +57,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     try {
       const rawTransactions = await gocardless.getAccountTransactions(account.gocardless_id)
-      console.log(`[v0] Raw transactions response:`, rawTransactions)
+      console.log(`[v0] Raw transactions response:`, JSON.stringify(rawTransactions, null, 2))
 
-      // Ensure we always have an array to work with
-      const transactions = Array.isArray(rawTransactions) ? rawTransactions : []
-      console.log(`[v0] Fetched ${transactions.length} transactions from GoCardless`)
+      // GoCardless devuelve: { transactions: { booked: [...], pending: [...] } }
+      const bookedTransactions = rawTransactions?.transactions?.booked || []
+      const pendingTransactions = rawTransactions?.transactions?.pending || []
+      const allTransactions = [...bookedTransactions, ...pendingTransactions]
 
-      const transformedTransactions = transactions.map((tx: any) => ({
+      console.log(`[v0] Booked transactions: ${bookedTransactions.length}`)
+      console.log(`[v0] Pending transactions: ${pendingTransactions.length}`)
+      console.log(`[v0] Total transactions: ${allTransactions.length}`)
+
+      const transformedTransactions = allTransactions.map((tx: any) => ({
         id: tx.transactionId || tx.id,
         amount: Number.parseFloat(tx.transactionAmount?.amount || tx.amount || "0"),
         currency: tx.transactionAmount?.currency || tx.currency || account.currency,
@@ -90,6 +95,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     } catch (gocardlessError: any) {
       if (gocardlessError.message && gocardlessError.message.includes("Rate limit exceeded")) {
         console.log("[v0] Rate limit exceeded, returning empty transactions with message")
+
+        const resetTimeMatch = gocardlessError.message.match(/Try again in (\d+) seconds/)
+        const resetTimeSeconds = resetTimeMatch ? Number.parseInt(resetTimeMatch[1]) : 86400 // Default to 24 hours
+        const resetTimeHours = Math.ceil(resetTimeSeconds / 3600)
+
         return NextResponse.json({
           account: {
             id: accountId,
@@ -98,15 +108,30 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           },
           transactions: [],
           source: "rate_limited",
-          message:
-            "Se ha excedido el límite de consultas diarias de GoCardless. Las transacciones se sincronizarán automáticamente mañana.",
+          message: `Se ha excedido el límite de consultas diarias de GoCardless. Las transacciones estarán disponibles en aproximadamente ${resetTimeHours} horas.`,
           rateLimitInfo: {
             exceeded: true,
-            resetTime: "24 horas",
+            resetTimeSeconds: resetTimeSeconds,
+            resetTimeHours: resetTimeHours,
           },
         })
       }
-      throw gocardlessError
+
+      console.error("[v0] GoCardless API error:", gocardlessError)
+      return NextResponse.json(
+        {
+          account: {
+            id: accountId,
+            display_name: account.display_name,
+            currency: account.currency,
+          },
+          transactions: [],
+          source: "error",
+          message: "Error al obtener transacciones de GoCardless. Inténtalo más tarde.",
+          error: gocardlessError.message || "Unknown error",
+        },
+        { status: 500 },
+      )
     }
   } catch (error) {
     console.error("[v0] Error fetching account transactions:", error)
