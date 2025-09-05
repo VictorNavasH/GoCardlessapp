@@ -378,6 +378,8 @@ class GoCardlessClient {
 
 export const gocardless = new GoCardlessClient()
 
+export { GoCardlessClient }
+
 export function getSupabaseClient() {
   const cookieStore = cookies()
   return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_ANON_KEY!, {
