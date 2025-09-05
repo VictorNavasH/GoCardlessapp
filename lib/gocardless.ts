@@ -340,7 +340,11 @@ class GoCardlessClient {
   }
 
   private async saveRateLimitInfo(accountId: string, scope: string) {
-    if (!this.rateLimitInfo.accountSuccessRemaining || !this.rateLimitInfo.accountSuccessLimit) {
+    if (
+      this.rateLimitInfo.accountSuccessRemaining === undefined ||
+      this.rateLimitInfo.accountSuccessLimit === undefined
+    ) {
+      console.log(`[v0] No rate limit headers found for account ${accountId}, scope ${scope}`)
       return // No hay información de rate limit para guardar
     }
 
@@ -352,7 +356,11 @@ class GoCardlessClient {
         ? new Date(Date.now() + this.rateLimitInfo.accountSuccessReset * 1000)
         : null
 
-      await supabase.from("gocardless_rate_limits").upsert(
+      console.log(
+        `[v0] Saving rate limit for account ${accountId}, scope ${scope}: ${this.rateLimitInfo.accountSuccessRemaining}/${this.rateLimitInfo.accountSuccessLimit}`,
+      )
+
+      const { data, error } = await supabase.from("gocardless_rate_limits").upsert(
         {
           account_id: accountId,
           scope: scope,
@@ -367,9 +375,11 @@ class GoCardlessClient {
         },
       )
 
-      console.log(
-        `[v0] Rate limit saved for account ${accountId}, scope ${scope}: ${this.rateLimitInfo.accountSuccessRemaining}/${this.rateLimitInfo.accountSuccessLimit}`,
-      )
+      if (error) {
+        console.error(`[v0] Error saving rate limit info:`, error)
+      } else {
+        console.log(`[v0] Rate limit saved successfully for account ${accountId}, scope ${scope}`)
+      }
     } catch (error) {
       console.error("[v0] Error saving rate limit info:", error)
     }
