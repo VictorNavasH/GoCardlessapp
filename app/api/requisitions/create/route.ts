@@ -47,12 +47,22 @@ export async function POST(request: NextRequest) {
       }
     } else {
       try {
-        const gcInstitutions = await gocardless.getInstitutions()
+        console.log("[v0] Looking for institution:", institution_id)
+        const gcInstitutions = await gocardless.getInstitutions("ES")
+        console.log("[v0] Found", gcInstitutions.length, "institutions from GoCardless for ES")
+
         const gcInstitution = gcInstitutions.find((inst: any) => inst.id === institution_id)
+        console.log("[v0] Institution found in GoCardless:", !!gcInstitution)
 
         if (!gcInstitution) {
+          console.log(
+            "[v0] Available institution IDs:",
+            gcInstitutions.slice(0, 5).map((inst: any) => inst.id),
+          )
           return NextResponse.json({ error: `Institution ${institution_id} not found in GoCardless` }, { status: 404 })
         }
+
+        console.log("[v0] Found institution:", gcInstitution.name, "with ID:", gcInstitution.id)
 
         const { data: institutionRecord, error: institutionError } = await supabase
           .from("gocardless_institutions")
