@@ -122,48 +122,98 @@ export async function POST(request: NextRequest) {
           console.log(`[v0] - Value Date: ${tx.valueDate}`)
           console.log(`[v0] - Description: ${tx.remittanceInformationUnstructured || tx.additionalInformation}`)
 
+          const processedTx = tx
+
+          // Si los campos principales están vacíos pero hay raw_data, extraer información de ahí
+          if (!tx.creditorName && !tx.debtorName && !tx.remittanceInformationUnstructured && tx.raw_data) {
+            console.log(`[v0] Detected CaixaBank format for transaction ${index + 1}, processing raw_data`)
+            try {
+              const rawData = typeof tx.raw_data === "string" ? JSON.parse(tx.raw_data) : tx.raw_data
+
+              // Extraer información de remittanceInformationUnstructuredArray
+              if (
+                rawData.remittanceInformationUnstructuredArray &&
+                Array.isArray(rawData.remittanceInformationUnstructuredArray)
+              ) {
+                processedTx.remittanceInformationUnstructured = rawData.remittanceInformationUnstructuredArray.join(" ")
+                console.log(
+                  `[v0] Extracted description from raw_data: ${processedTx.remittanceInformationUnstructured}`,
+                )
+              }
+
+              // Usar datos del raw_data si están disponibles
+              if (rawData.transactionAmount) {
+                processedTx.transactionAmount = rawData.transactionAmount
+              }
+              if (rawData.bookingDate) {
+                processedTx.bookingDate = rawData.bookingDate
+              }
+              if (rawData.valueDate) {
+                processedTx.valueDate = rawData.valueDate
+              }
+              if (rawData.transactionId) {
+                processedTx.transactionId = rawData.transactionId
+              }
+              if (rawData.entryReference) {
+                processedTx.entryReference = rawData.entryReference
+              }
+              if (rawData.bankTransactionCode) {
+                processedTx.bankTransactionCode = rawData.bankTransactionCode
+              }
+              if (rawData.proprietaryBankTransactionCode) {
+                processedTx.proprietaryBankTransactionCode = rawData.proprietaryBankTransactionCode
+              }
+
+              console.log(`[v0] Enhanced transaction data from raw_data:`, JSON.stringify(processedTx, null, 2))
+            } catch (parseError) {
+              console.error(`[v0] Error parsing raw_data for transaction ${index + 1}:`, parseError)
+            }
+          }
+
           const mappedTransaction = {
-            gocardless_id: tx.transactionId || tx.internalTransactionId || `tx_${Date.now()}_${index}`,
+            gocardless_id:
+              processedTx.transactionId || processedTx.internalTransactionId || `tx_${Date.now()}_${index}`,
             account_id: internalAccountId, // UUID interno de la cuenta
             account_gocardless_id: account.id, // GoCardless ID de la cuenta
-            transaction_id: tx.transactionId,
-            end_to_end_id: tx.endToEndId,
-            mandate_id: tx.mandateId,
-            cheque_number: tx.chequeNumber,
-            clearing_system_reference: tx.clearingSystemReference,
-            booking_date: tx.bookingDate || tx.valueDate || new Date().toISOString().split("T")[0],
-            value_date: tx.valueDate,
-            amount: tx.transactionAmount?.amount || "0",
-            currency: tx.transactionAmount?.currency || account.currency || "EUR",
-            exchange_rate: tx.exchangeRate,
-            original_amount: tx.originalAmount,
-            original_currency: tx.originalCurrency,
-            bank_transaction_code: tx.bankTransactionCode,
-            proprietary_bank_transaction_code: tx.proprietaryBankTransactionCode,
-            transaction_code: tx.transactionCode,
-            creditor_name: tx.creditorName,
-            creditor_account_iban: tx.creditorAccount?.iban,
-            creditor_account_bban: tx.creditorAccount?.bban,
-            creditor_agent_bic: tx.creditorAgent?.bic,
-            creditor_agent_name: tx.creditorAgent?.name,
-            creditor_id: tx.creditorId,
-            ultimate_creditor: tx.ultimateCreditor,
-            debtor_name: tx.debtorName,
-            debtor_account_iban: tx.debtorAccount?.iban,
-            debtor_account_bban: tx.debtorAccount?.bban,
-            debtor_agent_bic: tx.debtorAgent?.bic,
-            debtor_agent_name: tx.debtorAgent?.name,
-            debtor_id: tx.debtorId,
-            ultimate_debtor: tx.ultimateDebtor,
-            remittance_information_unstructured: tx.remittanceInformationUnstructured || tx.additionalInformation,
-            remittance_information_structured: tx.remittanceInformationStructured,
-            additional_information: tx.additionalInformation,
-            creditor_reference: tx.creditorReference,
-            balance_after_transaction: tx.balanceAfterTransaction,
-            purpose_code: tx.purposeCode,
-            merchant_category_code: tx.merchantCategoryCode,
-            entry_reference: tx.entryReference,
-            additional_information_structured: tx.additionalInformationStructured,
+            transaction_id: processedTx.transactionId,
+            end_to_end_id: processedTx.endToEndId,
+            mandate_id: processedTx.mandateId,
+            cheque_number: processedTx.chequeNumber,
+            clearing_system_reference: processedTx.clearingSystemReference,
+            booking_date: processedTx.bookingDate || processedTx.valueDate || new Date().toISOString().split("T")[0],
+            value_date: processedTx.valueDate,
+            amount: processedTx.transactionAmount?.amount || "0",
+            currency: processedTx.transactionAmount?.currency || account.currency || "EUR",
+            exchange_rate: processedTx.exchangeRate,
+            original_amount: processedTx.originalAmount,
+            original_currency: processedTx.originalCurrency,
+            bank_transaction_code: processedTx.bankTransactionCode,
+            proprietary_bank_transaction_code: processedTx.proprietaryBankTransactionCode,
+            transaction_code: processedTx.transactionCode,
+            creditor_name: processedTx.creditorName,
+            creditor_account_iban: processedTx.creditorAccount?.iban,
+            creditor_account_bban: processedTx.creditorAccount?.bban,
+            creditor_agent_bic: processedTx.creditorAgent?.bic,
+            creditor_agent_name: processedTx.creditorAgent?.name,
+            creditor_id: processedTx.creditorId,
+            ultimate_creditor: processedTx.ultimateCreditor,
+            debtor_name: processedTx.debtorName,
+            debtor_account_iban: processedTx.debtorAccount?.iban,
+            debtor_account_bban: processedTx.debtorAccount?.bban,
+            debtor_agent_bic: processedTx.debtorAgent?.bic,
+            debtor_agent_name: processedTx.debtorAgent?.name,
+            debtor_id: processedTx.debtorId,
+            ultimate_debtor: processedTx.ultimateDebtor,
+            remittance_information_unstructured:
+              processedTx.remittanceInformationUnstructured || processedTx.additionalInformation,
+            remittance_information_structured: processedTx.remittanceInformationStructured,
+            additional_information: processedTx.additionalInformation,
+            creditor_reference: processedTx.creditorReference,
+            balance_after_transaction: processedTx.balanceAfterTransaction,
+            purpose_code: processedTx.purposeCode,
+            merchant_category_code: processedTx.merchantCategoryCode,
+            entry_reference: processedTx.entryReference,
+            additional_information_structured: processedTx.additionalInformationStructured,
             raw_data: tx, // Guardar datos completos para debugging
             created_at: new Date().toISOString(),
           }

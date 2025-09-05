@@ -22,6 +22,22 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     console.log(`[v0] Found account with internal ID: ${account.id}, GoCardless ID: ${account.gocardless_id}`)
 
+    const { data: institutionData } = await supabase
+      .from("gocardless_accounts")
+      .select(`
+        gocardless_institutions!inner(name)
+      `)
+      .eq("gocardless_id", accountId)
+      .single()
+
+    const institutionName = institutionData?.gocardless_institutions?.name
+    const isCaixaBank = institutionName?.toLowerCase().includes("caixabank")
+
+    if (isCaixaBank) {
+      console.log(`[v0] 🏦 CAIXABANK DETECTED - Enhanced logging enabled for account: ${accountId}`)
+      console.log(`[v0] 🏦 Institution name: ${institutionName}`)
+    }
+
     const { data: localTransactions, error: localError } = await supabase
       .from("gocardless_transactions")
       .select("*")
@@ -30,6 +46,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     if (!localError && localTransactions && localTransactions.length > 0) {
       console.log(`[v0] Found ${localTransactions.length} transactions in local database`)
+
+      if (isCaixaBank) {
+        console.log(`[v0] 🏦 CAIXABANK - Found ${localTransactions.length} local transactions`)
+        console.log(`[v0] 🏦 CAIXABANK - Sample local transaction:`, JSON.stringify(localTransactions[0], null, 2))
+      }
 
       const transformedTransactions = localTransactions.map((tx: any) => ({
         id: tx.gocardless_id,
@@ -56,7 +77,25 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     try {
+      if (isCaixaBank) {
+        console.log(`[v0] 🏦 CAIXABANK - Calling GoCardless API for account: ${account.gocardless_id}`)
+      }
+
       const rawTransactions = await gocardless.getAccountTransactions(account.gocardless_id)
+
+      if (isCaixaBank) {
+        console.log(`[v0] 🏦 CAIXABANK - Raw GoCardless response:`)
+        console.log(`[v0] 🏦 CAIXABANK - Response type: ${typeof rawTransactions}`)
+        console.log(`[v0] 🏦 CAIXABANK - Response keys: ${rawTransactions ? Object.keys(rawTransactions) : "null"}`)
+        console.log(`[v0] 🏦 CAIXABANK - Full response:`, JSON.stringify(rawTransactions, null, 2))
+
+        if (rawTransactions?.transactions) {
+          console.log(`[v0] 🏦 CAIXABANK - Transactions object keys: ${Object.keys(rawTransactions.transactions)}`)
+          console.log(`[v0] 🏦 CAIXABANK - Booked transactions: ${rawTransactions.transactions.booked?.length || 0}`)
+          console.log(`[v0] 🏦 CAIXABANK - Pending transactions: ${rawTransactions.transactions.pending?.length || 0}`)
+        }
+      }
+
       console.log(`[v0] Raw transactions response:`, JSON.stringify(rawTransactions, null, 2))
 
       const bookedTransactions = rawTransactions?.transactions?.booked || []
@@ -66,6 +105,29 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       console.log(`[v0] Booked transactions: ${bookedTransactions.length}`)
       console.log(`[v0] Pending transactions: ${pendingTransactions.length}`)
       console.log(`[v0] Total transactions: ${allTransactions.length}`)
+
+      if (isCaixaBank) {
+        console.log(`[v0] 🏦 CAIXABANK - Processing ${allTransactions.length} total transactions`)
+        if (allTransactions.length > 0) {
+          console.log(`[v0] 🏦 CAIXABANK - First transaction structure:`, JSON.stringify(allTransactions[0], null, 2))
+        } else {
+          console.log(`[v0] 🏦 CAIXABANK - ⚠️ NO TRANSACTIONS FOUND - This may be the issue!`)
+          console.log(`[v0] 🏦 CAIXABANK - Checking if transactions are in different format...`)
+
+          // Check if transactions are directly in the response (alternative format)
+          if (Array.isArray(rawTransactions)) {
+            console.log(`[v0] 🏦 CAIXABANK - Found transactions in direct array format: ${rawTransactions.length}`)
+          } else if (rawTransactions && typeof rawTransactions === "object") {
+            console.log(`[v0] 🏦 CAIXABANK - Checking all properties for transaction data...`)
+            Object.keys(rawTransactions).forEach((key) => {
+              const value = rawTransactions[key]
+              if (Array.isArray(value)) {
+                console.log(`[v0] 🏦 CAIXABANK - Found array in property '${key}': ${value.length} items`)
+              }
+            })
+          }
+        }
+      }
 
       if (allTransactions.length > 0) {
         console.log(`[v0] Saving ${allTransactions.length} transactions to local database`)
@@ -170,6 +232,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         source: "gocardless_api_saved", // Indicar que se guardaron en la base de datos
       })
     } catch (gocardlessError: any) {
+      if (isCaixaBank) {
+        console.log(`[v0] 🏦 CAIXABANK - GoCardless API Error:`)
+        console.log(`[v0] 🏦 CAIXABANK - Error type: ${typeof gocardlessError}`)
+        console.log(`[v0] 🏦 CAIXABANK - Error message: ${gocardlessError.message}`)
+        console.log(`[v0] 🏦 CAIXABANK - Full error:`, JSON.stringify(gocardlessError, null, 2))
+      }
+
       if (gocardlessError.message && gocardlessError.message.includes("Rate limit exceeded")) {
         console.log("[v0] Rate limit exceeded, returning empty transactions with message")
 
