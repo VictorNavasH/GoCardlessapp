@@ -86,7 +86,7 @@ export async function GET() {
       })) || []
 
     const totalAccounts = accountsResult.count || 0
-    const maxRequestsPerAccountPerScope = 10
+    const maxRequestsPerAccountPerScope = 4
     const scopes = ["details", "balances", "transactions"]
     const maxDailyRequestsPerAccount = maxRequestsPerAccountPerScope * scopes.length
 
@@ -105,7 +105,13 @@ export async function GET() {
         callsToday: totalCallsToday,
         remainingCallsToday: totalRemainingCalls,
         accountsWithLimits: todayRateLimits.length,
-        note: "Los límites se aplican por cuenta bancaria. Cada endpoint tiene su propio límite de 10 requests/día.",
+        note: "Límites oficiales GoCardless: 4 requests/día por scope. Estrategia: 3 automáticos + 1 manual por scope.",
+        strategy: {
+          automaticRequestsPerScope: 3,
+          manualRequestsPerScope: 1,
+          totalAutomaticPerDay: 3 * scopes.length, // 9 requests automáticos
+          totalManualPerDay: 1 * scopes.length, // 3 requests manuales
+        },
       },
       balanceEvolution: {
         accounts: balanceEvolution,
@@ -134,11 +140,11 @@ export async function GET() {
       lastSync: new Date().toISOString(),
       daysUntilRenewal: 90,
       rateLimit: {
-        requestsPerAccountPerScope: 10,
+        requestsPerAccountPerScope: 4,
         scopes: ["details", "balances", "transactions"],
         totalAccountsConnected: 0,
-        maxDailyRequestsPerAccount: 30,
-        note: "Los límites se aplican por cuenta bancaria. Cada endpoint tiene su propio límite de 10 requests/día.",
+        maxDailyRequestsPerAccount: 12, // 4 × 3 scopes
+        note: "Límites oficiales GoCardless: 4 requests/día por scope. Estrategia: 3 automáticos + 1 manual por scope.",
       },
     }
 

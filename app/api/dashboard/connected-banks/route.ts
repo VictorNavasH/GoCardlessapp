@@ -40,6 +40,17 @@ export async function GET() {
       throw accountsError
     }
 
+    const today = new Date().toISOString().split("T")[0]
+    const { data: rateLimits, error: rateLimitsError } = await supabase
+      .from("gocardless_rate_limits")
+      .select("*")
+      .gte("created_at", `${today}T00:00:00`)
+      .lt("created_at", `${today}T23:59:59`)
+
+    if (rateLimitsError) {
+      console.log("[v0] Error fetching rate limits:", rateLimitsError)
+    }
+
     console.log("[v0] Found", accounts?.length || 0, "connected accounts")
 
     const bankGroups = new Map()
@@ -72,6 +83,21 @@ export async function GET() {
           expirationDate: expirationDate.toISOString(),
           connectedAt: createdAt.toISOString(),
           status: "ACTIVE",
+          apiCalls: {
+            today: 0,
+            remaining: 0,
+            maxDaily: 4, // 4 requests por día por cuenta (límite oficial GoCardless)
+            scopes: {
+              details: { used: 0, remaining: 4 },
+              balances: { used: 0, remaining: 4 },
+              transactions: { used: 0, remaining: 4 },
+            },
+            strategy: "Sincronización Inteligente (3x/día)",
+            schedule: "04:00 (completa), 12:00 (media), 21:00 (básica)",
+            automaticCalls: 3, // 3 automáticos por día total
+            manualCalls: 1, // 1 manual por día total
+            hasRealData: false, // Indica si los datos provienen de la base de datos real
+          },
         })
       }
 
@@ -93,6 +119,53 @@ export async function GET() {
         bank.status = "ACTIVE"
       }
     })
+
+    if (rateLimits && rateLimits.length > 0) {
+      console.log("[v0] Processing", rateLimits.length, "rate limit records")
+
+      bankGroups.forEach((bank) => {
+        bank.apiCalls.hasRealData = true
+        bank.apiCalls.today = 0
+        bank.apiCalls.remaining = 0
+
+        bank.accounts.forEach((account) => {
+          const accountLimits = rateLimits.filter((limit) => limit.account_gocardless_id === account.gocardless_id)
+
+          console.log("[v0] Found", accountLimits.length, "rate limits for account", account.gocardless_id)
+
+          accountLimits.forEach((limit) => {
+            const scope = limit.scope
+            if (bank.apiCalls.scopes[scope]) {
+              // Usar datos reales de la base de datos
+              const used = (limit.requests_limit || 4) - (limit.requests_remaining || 4)
+              bank.apiCalls.scopes[scope].used = used
+              bank.apiCalls.scopes[scope].remaining = limit.requests_remaining || 4
+
+              console.log("[v0] Scope", scope, "- Used:", used, "Remaining:", limit.requests_remaining)
+            }
+          })
+        })
+
+        // Calcular totales del banco basado en datos reales
+        bank.apiCalls.today = Object.values(bank.apiCalls.scopes).reduce((sum, scope) => sum + scope.used, 0)
+        bank.apiCalls.remaining = Object.values(bank.apiCalls.scopes).reduce((sum, scope) => sum + scope.remaining, 0)
+
+        console.log(
+          "[v0] Bank",
+          bank.bankName,
+          "- Total used today:",
+          bank.apiCalls.today,
+          "Remaining:",
+          bank.apiCalls.remaining,
+        )
+      })
+    } else {
+      console.log("[v0] No rate limit data found for today, showing real state (no API calls recorded)")
+      bankGroups.forEach((bank) => {
+        bank.apiCalls.hasRealData = false
+        console.log("[v0] Bank", bank.bankName, "- No API usage data available")
+      })
+    }
 
     const connectedBanks = Array.from(bankGroups.values())
 
