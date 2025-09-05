@@ -132,7 +132,7 @@ export default function BankSimulator() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-blue-50 flex items-center justify-center">
-          <div className="text-center">Cargando...</div>
+          <div className="text-center">Cargando autorización bancaria...</div>
         </div>
       }
     >
