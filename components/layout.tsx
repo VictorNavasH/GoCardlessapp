@@ -35,11 +35,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`${
-                        isActive
-                          ? "bg-blue-50 border-blue-500 text-blue-700"
-                          : "border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                      } group flex items-center px-2 py-2 text-sm font-medium border-l-4`}
+                      className={`${isActive ? "bg-blue-50 border-blue-500 text-blue-700" : "border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900"} group flex items-center px-2 py-2 text-sm font-medium border-l-4`}
                     >
                       <item.icon className="mr-3 h-5 w-5" />
                       {item.name}

@@ -8,14 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { InstitutionSelector } from "../../components/connect/institution-selector"
 import { ConnectionSteps } from "../../components/connect/connection-steps"
-import { Loader2, ExternalLink, ArrowLeft, TestTube } from "lucide-react"
+import { Loader2, ExternalLink, ArrowLeft, TestTube, RefreshCw } from "lucide-react"
 
 interface Institution {
   id: string
   name: string
   bic: string
   country: string
-  logo?: string
+  logo_url?: string
 }
 
 interface AlertState {
@@ -32,6 +32,7 @@ export default function ConnectPage() {
   const [loading, setLoading] = useState(false)
   const [institutionsLoading, setInstitutionsLoading] = useState(true)
   const [alert, setAlert] = useState<AlertState | null>(null)
+  const [syncingInstitutions, setSyncingInstitutions] = useState(false)
 
   useEffect(() => {
     console.log("[v0] useEffect triggered, fetching institutions...")
@@ -150,6 +151,34 @@ export default function ConnectPage() {
     }
   }
 
+  const handleSyncInstitutions = async () => {
+    setSyncingInstitutions(true)
+    setAlert(null)
+
+    try {
+      const res = await fetch("/api/institutions/sync", {
+        method: "POST",
+      })
+
+      const data = await res.json()
+
+      if (data.success) {
+        setAlert({
+          type: "success",
+          message: `Sincronización completada: ${data.synced} instituciones actualizadas`,
+        })
+        // Recargar la lista de instituciones
+        await fetchInstitutions()
+      } else {
+        setAlert({ type: "error", message: data.error || "Error sincronizando instituciones" })
+      }
+    } catch (error) {
+      setAlert({ type: "error", message: "Error de conexión durante la sincronización" })
+    } finally {
+      setSyncingInstitutions(false)
+    }
+  }
+
   const selectedInstitutionData = institutions.find((i) => i.id === selectedInstitution)
 
   console.log("[v0] ConnectPage rendering with:", {
@@ -183,32 +212,6 @@ export default function ConnectPage() {
 
         {/* Steps */}
         <ConnectionSteps currentStep={1} />
-
-        <Card className="bg-amber-50 border-amber-200">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-medium text-amber-900 flex items-center gap-2">
-                  <TestTube className="h-4 w-4" />
-                  Modo Prueba - Sandbox Finance
-                </h3>
-                <p className="text-sm text-amber-700">
-                  Prueba la conexión con el simulador bancario oficial de GoCardless
-                </p>
-              </div>
-              <Button
-                onClick={handleSandboxTest}
-                disabled={loading}
-                variant="outline"
-                className="border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
-              >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Probar Sandbox
-                <ExternalLink className="ml-2 h-4 w-4" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Alert */}
         {alert && (
@@ -285,7 +288,7 @@ export default function ConnectPage() {
                   <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium">
                     1
                   </span>
-                  <span>Selecciona tu banco de la lista o usa el modo prueba</span>
+                  <span>Selecciona tu banco de la lista</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-medium">
@@ -311,6 +314,62 @@ export default function ConnectPage() {
                   <strong>Tecnología PSD2:</strong> Utilizamos la tecnología oficial de GoCardless que cumple con las
                   regulaciones europeas PSD2 para garantizar la máxima seguridad en la conexión bancaria.
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Development Tools Section */}
+          <Card className="bg-amber-50 border-amber-200 border-dashed">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2 text-amber-900">
+                <TestTube className="h-5 w-5" />
+                Herramientas de Desarrollo
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-amber-900">Modo Prueba - Sandbox Finance</h3>
+                    <p className="text-sm text-amber-700">
+                      Prueba la conexión con el simulador bancario oficial de GoCardless
+                    </p>
+                  </div>
+                  <Button
+                    onClick={handleSandboxTest}
+                    disabled={loading}
+                    variant="outline"
+                    className="border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
+                  >
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Probar Sandbox
+                    <ExternalLink className="ml-2 h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="border-t border-amber-200 pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-medium text-amber-900">Sincronizar Instituciones Bancarias</h3>
+                      <p className="text-sm text-amber-700">
+                        Actualiza la lista de bancos disponibles desde GoCardless API
+                      </p>
+                    </div>
+                    <Button
+                      onClick={handleSyncInstitutions}
+                      disabled={syncingInstitutions}
+                      variant="outline"
+                      className="border-amber-300 text-amber-700 hover:bg-amber-100 bg-transparent"
+                    >
+                      {syncingInstitutions && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {!syncingInstitutions && <RefreshCw className="mr-2 h-4 w-4" />}
+                      Sincronizar Bancos
+                    </Button>
+                  </div>
+                </div>
+                <div className="text-xs text-amber-600 bg-amber-100 p-2 rounded">
+                  <strong>Nota:</strong> Estas herramientas son para testing y desarrollo. La sincronización descarga
+                  todos los bancos disponibles con sus logos y metadatos.
+                </div>
               </div>
             </CardContent>
           </Card>

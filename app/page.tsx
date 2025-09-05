@@ -8,7 +8,8 @@ import { QuickActionCard } from "../components/dashboard/quick-action-card"
 import { RecentTransactions } from "../components/dashboard/recent-transactions"
 import { AccountsSummary } from "../components/dashboard/accounts-summary"
 import { BalanceChart } from "../components/dashboard/balance-chart"
-import { Building2, CreditCard, TrendingUp, Users, Clock, Zap, AlertTriangle } from "lucide-react"
+import { ConnectedBanksGrid } from "../components/dashboard/connected-banks-grid"
+import { Building2, CreditCard, TrendingUp, Users, Zap, AlertTriangle } from "lucide-react"
 
 interface DashboardStats {
   totalAccounts: number
@@ -122,17 +123,6 @@ export default function HomePage() {
           <div className="bg-white p-6 rounded-lg border">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Renovación de Permisos</p>
-                <p className="text-2xl font-bold">{stats.daysUntilRenewal} días</p>
-                <p className={`text-sm ${getRenewalStatus().color}`}>{getRenewalStatus().status}</p>
-              </div>
-              <Clock className="h-8 w-8 text-orange-600" />
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg border">
-            <div className="flex items-center justify-between">
-              <div>
                 <p className="text-sm font-medium text-gray-600">Llamadas Restantes</p>
                 <p className="text-2xl font-bold">{stats.apiCallsRemaining}</p>
                 <p className="text-sm text-gray-500">Se renueva en 24h</p>
@@ -143,6 +133,8 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+
+        <ConnectedBanksGrid />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <BalanceChart />

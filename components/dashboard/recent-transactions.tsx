@@ -28,7 +28,8 @@ export function RecentTransactions() {
       const data = await res.json()
 
       if (res.ok) {
-        setTransactions(data)
+        const transactionsData = data.transactions || data
+        setTransactions(Array.isArray(transactionsData) ? transactionsData : [])
       } else {
         console.error("Error fetching transactions:", data.error)
         // Fallback to empty array on error

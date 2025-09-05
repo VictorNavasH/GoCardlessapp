@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, Search, TrendingUp, Download, Loader2 } from "lucide-react"
+import { Calendar, Search, TrendingUp, Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Transaction {
   id: string
@@ -22,6 +22,15 @@ interface Transaction {
   account_id: string
 }
 
+interface PaginationInfo {
+  currentPage: number
+  totalPages: number
+  totalTransactions: number
+  transactionsPerPage: number
+  hasNextPage: boolean
+  hasPreviousPage: boolean
+}
+
 export default function TransactionsPage() {
   const router = useRouter()
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -29,77 +38,71 @@ export default function TransactionsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [typeFilter, setTypeFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState<PaginationInfo | null>(null)
+  const [searchLoading, setSearchLoading] = useState(false)
 
   useEffect(() => {
     fetchTransactions()
-  }, [])
+  }, [currentPage])
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (searchTerm !== "") {
+        setCurrentPage(1)
+        fetchTransactions()
+      } else if (searchTerm === "") {
+        fetchTransactions()
+      }
+    }, 500)
+
+    return () => clearTimeout(timeoutId)
+  }, [searchTerm])
 
   const fetchTransactions = async () => {
     try {
-      // Simular transacciones de todas las cuentas
-      const mockTransactions: Transaction[] = [
-        {
-          id: "tx_1",
-          amount: -45.67,
-          currency: "EUR",
-          description: "Supermercado El Corte Inglés",
-          date: new Date().toISOString(),
-          type: "debit",
-          category: "Alimentación",
-          account_name: "Cuenta Corriente",
-          account_id: "acc_1",
-        },
-        {
-          id: "tx_2",
-          amount: 2500.0,
-          currency: "EUR",
-          description: "Nómina - Empresa ABC",
-          date: new Date(Date.now() - 86400000).toISOString(),
-          type: "credit",
-          category: "Salario",
-          account_name: "Cuenta Nómina",
-          account_id: "acc_3",
-        },
-        {
-          id: "tx_3",
-          amount: -12.5,
-          currency: "EUR",
-          description: "Netflix Subscription",
-          date: new Date(Date.now() - 172800000).toISOString(),
-          type: "debit",
-          category: "Entretenimiento",
-          account_name: "Cuenta Corriente",
-          account_id: "acc_1",
-        },
-        {
-          id: "tx_4",
-          amount: -89.99,
-          currency: "EUR",
-          description: "Gasolinera Repsol",
-          date: new Date(Date.now() - 259200000).toISOString(),
-          type: "debit",
-          category: "Transporte",
-          account_name: "Cuenta Corriente",
-          account_id: "acc_1",
-        },
-        {
-          id: "tx_5",
-          amount: 150.0,
-          currency: "EUR",
-          description: "Transferencia de Juan",
-          date: new Date(Date.now() - 345600000).toISOString(),
-          type: "credit",
-          category: "Transferencias",
-          account_name: "Cuenta de Ahorro",
-          account_id: "acc_2",
-        },
-      ]
+      if (searchTerm !== "") {
+        setSearchLoading(true)
+      } else {
+        setLoading(true)
+      }
 
-      setTransactions(mockTransactions)
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: "50",
+        ...(searchTerm && { search: searchTerm }),
+      })
+
+      const res = await fetch(`/api/transactions?${params}`)
+      const data = await res.json()
+
+      if (res.ok) {
+        const transformedTransactions: Transaction[] = data.transactions.map((tx: any) => ({
+          id: tx.id,
+          amount: tx.amount,
+          currency: tx.currency,
+          description: tx.description,
+          date: tx.date,
+          type: tx.type,
+          category: tx.category || "Sin categoría",
+          account_name: tx.account_name,
+          account_id: tx.account_id || "unknown",
+        }))
+
+        setTransactions(transformedTransactions)
+        setPagination(data.pagination)
+      } else {
+        console.error("Error fetching transactions:", data.error)
+        setTransactions([])
+        setPagination(null)
+      }
     } catch (error) {
       console.error("Error fetching transactions:", error)
+      setTransactions([])
+      setPagination(null)
     } finally {
       setLoading(false)
+      setSearchLoading(false)
     }
   }
 
@@ -119,15 +122,10 @@ export default function TransactionsPage() {
   }
 
   const filteredTransactions = transactions.filter((transaction) => {
-    const matchesSearch =
-      transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      transaction.account_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (transaction.category && transaction.category.toLowerCase().includes(searchTerm.toLowerCase()))
-
     const matchesType = typeFilter === "all" || transaction.type === typeFilter
     const matchesCategory = categoryFilter === "all" || transaction.category === categoryFilter
 
-    return matchesSearch && matchesType && matchesCategory
+    return matchesType && matchesCategory
   })
 
   const getUniqueCategories = () => {
@@ -149,7 +147,23 @@ export default function TransactionsPage() {
     return { totalIncome, totalExpenses, count: filteredTransactions.length }
   }
 
-  if (loading) {
+  const goToPage = (page: number) => {
+    setCurrentPage(page)
+  }
+
+  const goToPreviousPage = () => {
+    if (pagination?.hasPreviousPage) {
+      setCurrentPage(currentPage - 1)
+    }
+  }
+
+  const goToNextPage = () => {
+    if (pagination?.hasNextPage) {
+      setCurrentPage(currentPage + 1)
+    }
+  }
+
+  if (loading && currentPage === 1) {
     return (
       <Layout>
         <div className="flex justify-center items-center h-64">
@@ -168,7 +182,11 @@ export default function TransactionsPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">Transacciones</h1>
-            <p className="text-gray-600">Historial completo de movimientos</p>
+            <p className="text-gray-600">
+              {pagination
+                ? `${pagination.totalTransactions} transacciones totales - Página ${pagination.currentPage} de ${pagination.totalPages}`
+                : "Historial completo de movimientos"}
+            </p>
           </div>
           <Button variant="outline" className="flex items-center gap-2 bg-transparent">
             <Download className="h-4 w-4" />
@@ -184,7 +202,7 @@ export default function TransactionsPage() {
                 <TrendingUp className="h-4 w-4 text-blue-600" />
                 <div>
                   <p className="text-sm text-gray-600">Total Transacciones</p>
-                  <p className="text-xl font-bold">{stats.count}</p>
+                  <p className="text-xl font-bold">{pagination?.totalTransactions || 0}</p>
                 </div>
               </div>
             </CardContent>
@@ -195,7 +213,7 @@ export default function TransactionsPage() {
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-green-600" />
                 <div>
-                  <p className="text-sm text-gray-600">Ingresos</p>
+                  <p className="text-sm text-gray-600">Ingresos (página)</p>
                   <p className="text-xl font-bold text-green-600">{formatCurrency(stats.totalIncome)}</p>
                 </div>
               </div>
@@ -207,7 +225,7 @@ export default function TransactionsPage() {
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-red-600 rotate-180" />
                 <div>
-                  <p className="text-sm text-gray-600">Gastos</p>
+                  <p className="text-sm text-gray-600">Gastos (página)</p>
                   <p className="text-xl font-bold text-red-600">{formatCurrency(stats.totalExpenses)}</p>
                 </div>
               </div>
@@ -219,7 +237,7 @@ export default function TransactionsPage() {
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-blue-600" />
                 <div>
-                  <p className="text-sm text-gray-600">Balance</p>
+                  <p className="text-sm text-gray-600">Balance (página)</p>
                   <p
                     className={`text-xl font-bold ${
                       stats.totalIncome - stats.totalExpenses >= 0 ? "text-green-600" : "text-red-600"
@@ -240,11 +258,14 @@ export default function TransactionsPage() {
               <div className="flex-1">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  {searchLoading && (
+                    <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin text-gray-400" />
+                  )}
                   <Input
-                    placeholder="Buscar transacciones..."
+                    placeholder="Buscar en todas las transacciones..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-10"
+                    className="pl-10 pr-10"
                   />
                 </div>
               </div>
@@ -281,10 +302,16 @@ export default function TransactionsPage() {
         {/* Transactions List */}
         <Card>
           <CardHeader>
-            <CardTitle>Transacciones ({filteredTransactions.length})</CardTitle>
+            <CardTitle>
+              Transacciones ({filteredTransactions.length} de {pagination?.transactionsPerPage || 50} en esta página)
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            {filteredTransactions.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+            ) : filteredTransactions.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">No se encontraron transacciones</p>
               </div>
@@ -334,6 +361,66 @@ export default function TransactionsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {pagination && pagination.totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 pt-4 border-t">
+                <div className="text-sm text-gray-600">
+                  Mostrando {(pagination.currentPage - 1) * pagination.transactionsPerPage + 1} -{" "}
+                  {Math.min(pagination.currentPage * pagination.transactionsPerPage, pagination.totalTransactions)} de{" "}
+                  {pagination.totalTransactions} transacciones
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToPreviousPage}
+                    disabled={!pagination.hasPreviousPage || loading}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                      let pageNum: number
+                      if (pagination.totalPages <= 5) {
+                        pageNum = i + 1
+                      } else if (pagination.currentPage <= 3) {
+                        pageNum = i + 1
+                      } else if (pagination.currentPage >= pagination.totalPages - 2) {
+                        pageNum = pagination.totalPages - 4 + i
+                      } else {
+                        pageNum = pagination.currentPage - 2 + i
+                      }
+
+                      return (
+                        <Button
+                          key={pageNum}
+                          variant={pageNum === pagination.currentPage ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => goToPage(pageNum)}
+                          disabled={loading}
+                          className="w-8 h-8 p-0"
+                        >
+                          {pageNum}
+                        </Button>
+                      )
+                    })}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={goToNextPage}
+                    disabled={!pagination.hasNextPage || loading}
+                  >
+                    Siguiente
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

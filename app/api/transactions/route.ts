@@ -4,22 +4,33 @@ import { createClient } from "@/lib/supabase/server"
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
-    const limit = Number.parseInt(searchParams.get("limit") || "10")
+    const page = Number.parseInt(searchParams.get("page") || "1")
+    const limit = Number.parseInt(searchParams.get("limit") || "50")
+    const search = searchParams.get("search") || ""
     const accountId = searchParams.get("account_id")
 
     const supabase = await createClient()
 
+    const offset = (page - 1) * limit
+
     let query = supabase
       .from("gocardless_transactions")
-      .select("*")
+      .select("*", { count: "exact" })
       .order("booking_date", { ascending: false })
-      .limit(limit)
+
+    if (search) {
+      query = query.or(
+        `remittance_information_unstructured.ilike.%${search}%,creditor_name.ilike.%${search}%,debtor_name.ilike.%${search}%,amount.ilike.%${search}%`,
+      )
+    }
 
     if (accountId) {
       query = query.eq("account_id", accountId)
     }
 
-    const { data: transactions, error } = await query
+    query = query.range(offset, offset + limit - 1)
+
+    const { data: transactions, error, count } = await query
 
     if (error) {
       console.error("[v0] Database error:", error)
@@ -72,7 +83,19 @@ export async function GET(request: Request) {
         }
       }) || []
 
-    return NextResponse.json(transformedTransactions)
+    const totalPages = Math.ceil((count || 0) / limit)
+
+    return NextResponse.json({
+      transactions: transformedTransactions,
+      pagination: {
+        currentPage: page,
+        totalPages,
+        totalTransactions: count || 0,
+        transactionsPerPage: limit,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    })
   } catch (error) {
     console.error("[v0] API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })

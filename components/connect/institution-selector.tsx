@@ -9,7 +9,7 @@ interface Institution {
   name: string
   bic: string
   country: string
-  logo?: string
+  logo_url?: string
 }
 
 interface InstitutionSelectorProps {
@@ -51,7 +51,7 @@ export function InstitutionSelector({ institutions, selectedInstitution, onSelec
             <CardContent className="p-3">
               <div className="flex flex-col items-center text-center gap-2">
                 <img
-                  src={institution.logo || "/bank-placeholder.png"}
+                  src={institution.logo_url || "/bank-placeholder.png"}
                   alt={institution.name}
                   className="w-8 h-8 rounded object-cover"
                 />

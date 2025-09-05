@@ -5,29 +5,32 @@ export async function GET() {
   try {
     const supabase = await createClient()
 
-    const [accountsResult, transactionsResult, institutionsResult, lastSyncResult, requisitionsResult] =
-      await Promise.all([
-        supabase.from("gocardless_accounts").select("id", { count: "exact" }),
-
-        // Total transactions
-        supabase
-          .from("gocardless_transactions")
-          .select("id", { count: "exact" }),
-
-        supabase.from("gocardless_accounts").select("institution_id"),
-
-        // Last sync (most recent account update)
-        supabase
-          .from("gocardless_accounts")
-          .select("updated_at")
-          .order("updated_at", { ascending: false })
-          .limit(1),
-
-        supabase
-          .from("gocardless_requisitions")
-          .select("expires_at, created_at")
-          .order("created_at", { ascending: false }),
-      ])
+    const [
+      accountsResult,
+      transactionsResult,
+      institutionsResult,
+      lastSyncResult,
+      requisitionsResult,
+      rateLimitsResult,
+      syncLogsResult,
+      balanceHistoryResult,
+    ] = await Promise.all([
+      supabase.from("gocardless_accounts").select("id", { count: "exact" }),
+      supabase.from("gocardless_transactions").select("id", { count: "exact" }),
+      supabase.from("gocardless_accounts").select("institution_id"),
+      supabase.from("gocardless_accounts").select("updated_at").order("updated_at", { ascending: false }).limit(1),
+      supabase
+        .from("gocardless_requisitions")
+        .select("id, expires_at, created_at, status")
+        .eq("status", "LN")
+        .order("created_at", { ascending: false }),
+      supabase.from("gocardless_rate_limits").select("*").eq("date", new Date().toISOString().split("T")[0]),
+      supabase.from("gocardless_sync_logs").select("*").order("executed_at", { ascending: false }).limit(10),
+      supabase
+        .from("gocardless_accounts")
+        .select("current_balance, balance_last_updated_at, gocardless_id")
+        .not("current_balance", "is", null),
+    ])
 
     if (accountsResult.error) {
       console.error("[v0] Error fetching accounts count:", accountsResult.error)
@@ -38,33 +41,84 @@ export async function GET() {
 
     const uniqueInstitutions = new Set(institutionsResult.data?.map((acc) => acc.institution_id) || []).size
 
-    const mostRecentRequisition = requisitionsResult.data?.[0]
     let daysUntilRenewal = 90
-    if (mostRecentRequisition?.created_at) {
-      const createdDate = new Date(mostRecentRequisition.created_at)
-      const renewalDate = new Date(createdDate.getTime() + 90 * 24 * 60 * 60 * 1000)
-      const now = new Date()
-      daysUntilRenewal = Math.max(0, Math.ceil((renewalDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)))
+    let nextRenewalBank = null
+    if (requisitionsResult.data && requisitionsResult.data.length > 0) {
+      let earliestRenewal = null
+
+      for (const requisition of requisitionsResult.data) {
+        const createdDate = new Date(requisition.created_at)
+        const renewalDate = new Date(createdDate.getTime() + 90 * 24 * 60 * 60 * 1000)
+
+        if (!earliestRenewal || renewalDate < earliestRenewal.date) {
+          earliestRenewal = { date: renewalDate, requisition }
+        }
+      }
+
+      if (earliestRenewal) {
+        const now = new Date()
+        daysUntilRenewal = Math.max(
+          0,
+          Math.ceil((earliestRenewal.date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)),
+        )
+        nextRenewalBank = `Requisition ${earliestRenewal.requisition.id.substring(0, 8)}`
+      }
     }
 
-    // Según documentación oficial: 10 requests/día por scope (details, balances, transactions) por cuenta
+    const todayRateLimits = rateLimitsResult.data || []
+    const totalCallsToday = todayRateLimits.reduce((sum, rl) => sum + (rl.limit_per_day - rl.remaining_calls), 0)
+    const totalRemainingCalls = todayRateLimits.reduce((sum, rl) => sum + rl.remaining_calls, 0)
+
+    const balanceEvolution =
+      balanceHistoryResult.data?.map((account) => ({
+        accountId: account.gocardless_id,
+        currentBalance: account.current_balance,
+        lastUpdated: account.balance_last_updated_at,
+      })) || []
+
+    const recentSyncs =
+      syncLogsResult.data?.slice(0, 5).map((sync) => ({
+        type: sync.sync_type,
+        executedAt: sync.executed_at,
+        totalAccounts: sync.total_accounts,
+        successfulAccounts: sync.successful_accounts,
+        failedAccounts: sync.failed_accounts,
+      })) || []
+
     const totalAccounts = accountsResult.count || 0
-    const maxRequestsPerAccountPerScope = 10 // Límite oficial de GoCardless
-    const scopes = 3 // details, balances, transactions
-    const maxDailyRequestsPerAccount = maxRequestsPerAccountPerScope * scopes
+    const maxRequestsPerAccountPerScope = 10
+    const scopes = ["details", "balances", "transactions"]
+    const maxDailyRequestsPerAccount = maxRequestsPerAccountPerScope * scopes.length
 
     const stats = {
-      totalAccounts: accountsResult.count || 0,
+      totalAccounts,
       totalTransactions: transactionsResult.count || 0,
       connectedInstitutions: uniqueInstitutions,
       lastSync: lastSyncResult.data?.[0]?.updated_at || new Date().toISOString(),
       daysUntilRenewal,
+      nextRenewalBank,
       rateLimit: {
         requestsPerAccountPerScope: maxRequestsPerAccountPerScope,
-        scopes: ["details", "balances", "transactions"],
+        scopes,
         totalAccountsConnected: totalAccounts,
-        maxDailyRequestsPerAccount: maxDailyRequestsPerAccount,
+        maxDailyRequestsPerAccount,
+        callsToday: totalCallsToday,
+        remainingCallsToday: totalRemainingCalls,
+        accountsWithLimits: todayRateLimits.length,
         note: "Los límites se aplican por cuenta bancaria. Cada endpoint tiene su propio límite de 10 requests/día.",
+      },
+      balanceEvolution: {
+        accounts: balanceEvolution,
+        totalAccountsWithBalance: balanceEvolution.length,
+        lastBalanceUpdate:
+          balanceEvolution.length > 0
+            ? Math.max(...balanceEvolution.map((b) => new Date(b.lastUpdated || 0).getTime()))
+            : null,
+      },
+      syncHistory: {
+        recentSyncs,
+        totalSyncs: syncLogsResult.count || 0,
+        lastSyncType: recentSyncs[0]?.type || null,
       },
     }
 
