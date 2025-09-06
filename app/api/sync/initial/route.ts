@@ -124,49 +124,51 @@ export async function POST(request: NextRequest) {
 
           const processedTx = { ...tx }
 
-          // Detectar si es formato CaixaBank/Sabadell (campos principales vacíos pero raw_data presente)
           const isCaixaBankFormat =
-            !tx.creditorName &&
-            !tx.debtorName &&
-            !tx.remittanceInformationUnstructured &&
-            (tx.raw_data || (typeof tx === "object" && tx.remittanceInformationUnstructuredArray))
+            (!tx.creditorName || tx.creditorName === null) &&
+            (!tx.debtorName || tx.debtorName === null) &&
+            (!tx.remittanceInformationUnstructured || tx.remittanceInformationUnstructured === null) &&
+            tx.remittanceInformationUnstructuredArray &&
+            Array.isArray(tx.remittanceInformationUnstructuredArray)
+
+          console.log(`[v0] Transaction ${index + 1} format check:`)
+          console.log(`[v0] - creditorName: ${tx.creditorName}`)
+          console.log(`[v0] - debtorName: ${tx.debtorName}`)
+          console.log(`[v0] - remittanceInformationUnstructured: ${tx.remittanceInformationUnstructured}`)
+          console.log(
+            `[v0] - remittanceInformationUnstructuredArray: ${JSON.stringify(tx.remittanceInformationUnstructuredArray)}`,
+          )
+          console.log(`[v0] - isCaixaBankFormat: ${isCaixaBankFormat}`)
 
           if (isCaixaBankFormat) {
-            console.log(`[v0] Detected CaixaBank/Sabadell format for transaction ${index + 1}, processing raw_data`)
+            console.log(
+              `[v0] Detected CaixaBank/Sabadell format for transaction ${index + 1}, processing remittanceInformationUnstructuredArray`,
+            )
 
             try {
-              // Si raw_data es string, parsearlo; si no, usar el objeto directamente
-              let rawData = tx.raw_data
-              if (typeof rawData === "string") {
-                rawData = JSON.parse(rawData)
-              } else if (!rawData && tx.remittanceInformationUnstructuredArray) {
-                // Usar datos directos del objeto si no hay raw_data
-                rawData = tx
-              }
-
               // Extraer descripción de remittanceInformationUnstructuredArray
               if (
-                rawData?.remittanceInformationUnstructuredArray &&
-                Array.isArray(rawData.remittanceInformationUnstructuredArray)
+                tx.remittanceInformationUnstructuredArray &&
+                Array.isArray(tx.remittanceInformationUnstructuredArray)
               ) {
-                processedTx.remittanceInformationUnstructured = rawData.remittanceInformationUnstructuredArray.join(" ")
+                processedTx.remittanceInformationUnstructured = tx.remittanceInformationUnstructuredArray.join(" ")
                 console.log(`[v0] Extracted description: ${processedTx.remittanceInformationUnstructured}`)
               }
 
-              // Extraer otros campos útiles del raw_data
-              if (rawData?.creditorName) processedTx.creditorName = rawData.creditorName
-              if (rawData?.debtorName) processedTx.debtorName = rawData.debtorName
-              if (rawData?.ultimateCreditor) processedTx.ultimateCreditor = rawData.ultimateCreditor
-              if (rawData?.ultimateDebtor) processedTx.ultimateDebtor = rawData.ultimateDebtor
-              if (rawData?.creditorAccount?.iban) {
-                processedTx.creditorAccount = { iban: rawData.creditorAccount.iban }
+              // Extraer otros campos útiles si están disponibles
+              if (tx.creditorName) processedTx.creditorName = tx.creditorName
+              if (tx.debtorName) processedTx.debtorName = tx.debtorName
+              if (tx.ultimateCreditor) processedTx.ultimateCreditor = tx.ultimateCreditor
+              if (tx.ultimateDebtor) processedTx.ultimateDebtor = tx.ultimateDebtor
+              if (tx.creditorAccount?.iban) {
+                processedTx.creditorAccount = { iban: tx.creditorAccount.iban }
               }
-              if (rawData?.debtorAccount?.iban) {
-                processedTx.debtorAccount = { iban: rawData.debtorAccount.iban }
+              if (tx.debtorAccount?.iban) {
+                processedTx.debtorAccount = { iban: tx.debtorAccount.iban }
               }
-              if (rawData?.mandateId) processedTx.mandateId = rawData.mandateId
-              if (rawData?.creditorId) processedTx.creditorId = rawData.creditorId
-              if (rawData?.endToEndId) processedTx.endToEndId = rawData.endToEndId
+              if (tx.mandateId) processedTx.mandateId = tx.mandateId
+              if (tx.creditorId) processedTx.creditorId = tx.creditorId
+              if (tx.endToEndId) processedTx.endToEndId = tx.endToEndId
 
               console.log(`[v0] Enhanced transaction data:`, JSON.stringify(processedTx, null, 2))
             } catch (parseError) {
